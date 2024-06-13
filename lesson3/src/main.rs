@@ -1,5 +1,3 @@
-use std::usize;
-
 ///
 /// функция double_int32 принимает 32-х битное целое знаковое число
 /// и возвращает 32-х битное целое знаковое число, равное удвоенному входному.
@@ -47,7 +45,13 @@ fn tuple_sum(a: (u32, u32)) -> u32 {
 ///  функция array_sum принимает массив из трёх целых чисел.
 /// Возвращает целое число, равное сумме чисел во входном массиве.
 fn array_sum_v1(a: [u32; 3]) -> u32 {
+    //i'm in the process of learning
+    #[allow(clippy::unnecessary_fold)]
     a.iter().fold(0, |acc, x| acc + x)
+}
+
+fn array_sum_v1a(a: [u32; 3]) -> u32 {
+    a.iter().sum()
 }
 
 fn array_sum_v2(a: [u32; 3]) -> u32 {
@@ -70,6 +74,7 @@ fn array_sum_v3(a: [u32; 3]) -> u32 {
     sum
 }
 
+///FIXME: please explain how I can run loop1
 // fn array_sum_v4(a: [u32; 3]) -> u32 {
 //     let mut loop1 = |idx:usize, acc:u32| {
 //         if idx < 3 {
@@ -100,6 +105,7 @@ fn main() {
 
     println!("tuple_sum:{}", tuple_sum((23, 45)));
     println!("array_sum_v1:{}", array_sum_v1([1, 2, 3]));
+    println!("array_sum_v1a:{}", array_sum_v1a([1, 2, 3]));
     println!("array_sum_v2:{}", array_sum_v2([1, 2, 3]));
     println!("array_sum_v3:{}", array_sum_v3([1, 2, 3]));
 }
