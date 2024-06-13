@@ -1,0 +1,10 @@
+{
+  "image": "rust:1.78.0-buster",
+  "customizations": {
+    // Configure properties specific to VS Code.
+    "vscode": {
+      // Add the IDs of extensions you want installed when the container is created.
+      "extensions": ["rust-lang.rust-analyzer","vadimcn.vscode-lldb","serayuzgur.crates","tamasfe.even-better-toml"]
+    }
+  }
+}
