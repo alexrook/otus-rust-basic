@@ -8,13 +8,13 @@ fn double_int32(a: i32) -> i32 {
 ///  функция double_int64 принимает 32-х битное целое знаковое число
 /// и возвращает 64-х битное целое знаковое число, равное удвоенному входному.
 fn double_int64(a: i32) -> i64 {
-    a as i64 * 2_i64
+    a as i64 * 2
 }
 ///
 /// функция double_float32 принимает 32-х битное число с плавающей точкой
 /// и возвращает 32-х битное число с плавающей точкой, равное удвоенному входному.
 fn double_float32(a: f32) -> f32 {
-    a * 2.0_f32
+    a * 2.0
 }
 ///
 /// функция double_float64 принимает 32-х битное число с плавающей точкой
@@ -37,10 +37,21 @@ fn int_plus_float_to_int(a: i32, b: f32) -> i64 {
 ///
 ///  функция tuple_sum принимает кортеж из двух целых чисел.
 /// Возвращает целое число, равное сумме чисел во входном кортеже.
-fn tuple_sum(a: (u32, u32)) -> u32 {
+///
+
+fn tuple_sum_v0(a: (u32, u32)) -> u32 {
+    a.0 + a.1
+}
+
+fn tuple_sum_v1(a: (u32, u32)) -> u32 {
     let (left, right) = a;
     left + right
 }
+//pattern matching in args
+fn tuple_sum_v2((left, right): (u32, u32)) -> u32 {
+    left + right
+}
+
 ///
 ///  функция array_sum принимает массив из трёх целых чисел.
 /// Возвращает целое число, равное сумме чисел во входном массиве.
@@ -103,9 +114,14 @@ fn main() {
         int_plus_float_to_int(42, 1.2_f32)
     );
 
-    println!("tuple_sum:{}", tuple_sum((23, 45)));
+    println!("tuple_sum_v0:{}", tuple_sum_v0((23, 45)));
+    println!("tuple_sum_v2:{}", tuple_sum_v2((23, 45)));
+    println!("tuple_sum_v1:{}", tuple_sum_v1((23, 45)));
+    println!("tuple_sum_v2:{}", tuple_sum_v2((23, 45)));
+
     println!("array_sum_v1:{}", array_sum_v1([1, 2, 3]));
     println!("array_sum_v1a:{}", array_sum_v1a([1, 2, 3]));
     println!("array_sum_v2:{}", array_sum_v2([1, 2, 3]));
     println!("array_sum_v3:{}", array_sum_v3([1, 2, 3]));
+    
 }
