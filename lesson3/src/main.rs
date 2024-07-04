@@ -123,5 +123,4 @@ fn main() {
     println!("array_sum_v1a:{}", array_sum_v1a([1, 2, 3]));
     println!("array_sum_v2:{}", array_sum_v2([1, 2, 3]));
     println!("array_sum_v3:{}", array_sum_v3([1, 2, 3]));
-    
 }
