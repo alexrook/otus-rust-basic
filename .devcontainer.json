@@ -1,10 +1,19 @@
 {
-  "image": "rust:1.78.0-buster",
+  //"image": "rust:1.78.0-buster",
+  "build": {
+    // Path is relative to the devcontainer.json file.
+    "dockerfile": "Dockerfile"
+  },
   "customizations": {
     // Configure properties specific to VS Code.
     "vscode": {
       // Add the IDs of extensions you want installed when the container is created.
-      "extensions": ["rust-lang.rust-analyzer","vadimcn.vscode-lldb","serayuzgur.crates","tamasfe.even-better-toml"]
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "serayuzgur.crates",
+        "tamasfe.even-better-toml"
+      ]
     }
   }
 }
