@@ -27,6 +27,7 @@ pub fn get_nth<T>(slice: &mut [T], n: usize) -> &mut T {
 /// Возвращает ссылку на N-ый элемент слайса с конца.
 pub fn get_nth_reverse<T>(slice: &mut [T], n: usize) -> &mut T {
     let i: usize = slice.len() - n;
+    println!("index[{}], n[{}], len[{}]", i, n, slice.len());
     &mut slice[i]
 }
 
@@ -38,8 +39,8 @@ pub fn split_slice<T>(slice: &[T], n: usize) -> (&[T], &[T]) {
     (first, second)
 }
 
-//Принимает слайс и возвращает массив слайсов,
-//содержащий четыре равные (насколько возможно) части исходного слайса.
+///Принимает слайс и возвращает массив слайсов,
+///содержащий четыре равные (насколько возможно) части исходного слайса.
 pub fn get_slice_array<T>(slice: &[T]) -> [&[T]; 4] {
     let len: usize = slice.len();
     let part_size: usize = len / 4;
@@ -51,3 +52,42 @@ pub fn get_slice_array<T>(slice: &[T]) -> [&[T]; 4] {
     ]
 }
 //     Протестировать функции.
+
+#[cfg(test)]
+pub mod test {
+
+    use super::*;
+
+    #[test]
+    fn get_elem_should_return_ok() {
+        let mut tuple = ("e".to_string(), 2);
+        let actual = get_elem(&mut tuple, true);
+
+        assert_eq!(actual, Ok(&mut "e".to_string()));
+    }
+
+    #[test]
+    fn get_elem_should_return_err() {
+        let mut tuple = ("e".to_string(), 2);
+        let actual = get_elem(&mut tuple, false);
+
+        assert_eq!(actual, Err(&mut 2));
+    }
+
+    #[test]
+    fn get_nth_must_return_correct_value() {
+        let mut a = [1, 2, 3, 4, 5];
+        let slice1 = &mut a[1..3];
+        let slice2 = &mut [1, 2, 3, 4, 5];
+        let actual = get_nth(slice1, 3);
+        let actual2 = get_nth(slice2, 3);
+        assert_eq!(actual, &mut 4)
+    }
+
+    #[test]
+    fn get_nth_reverse_return_correct_value() {
+        let slice = &mut [1, 2, 3, 4, 5];
+        let actual = get_nth_reverse(slice, 4);
+        assert_eq!(actual, &mut 2)
+    }
+}
