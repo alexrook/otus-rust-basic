@@ -1,5 +1,3 @@
 [workspace]
 
-members = [
-    "lesson3"
-]
+members = ["lesson3", "lesson9"]
