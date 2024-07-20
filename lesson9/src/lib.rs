@@ -1,7 +1,7 @@
 //! Занятие 9
 //! Домашнее задание
 //!    Требования:
-//! * Убедиться, что копилятор не позволит вернуть
+//! * Убедиться, что компилятор не позволит вернуть
 //!     более одной мутабельной ссылки на один объект.
 //! * Реализованы и протестированы все перечисленные функции.
 //! * `cargo clippy`` и `cargo fmt --check` не выдают предупреждений и ошибок.
@@ -27,7 +27,7 @@ pub fn get_nth<T>(slice: &mut [T], n: usize) -> &mut T {
 /// Возвращает ссылку на N-ый элемент слайса с конца.
 pub fn get_nth_reverse<T>(slice: &mut [T], n: usize) -> &mut T {
     let i: usize = slice.len() - n;
-    println!("index[{}], n[{}], len[{}]", i, n, slice.len());
+    //println!("index[{}], n[{}], len[{}]", i, n, slice.len());
     &mut slice[i]
 }
 
@@ -56,6 +56,8 @@ pub fn get_slice_array<T>(slice: &[T]) -> [&[T]; 4] {
 #[cfg(test)]
 pub mod test {
 
+    use crate::split_slice;
+
     use super::*;
 
     #[test]
@@ -78,10 +80,15 @@ pub mod test {
     fn get_nth_must_return_correct_value() {
         let mut a = [1, 2, 3, 4, 5];
         let slice1 = &mut a[1..3];
+        // проверяю, что не ошибся с предположением о содержимом слайса :-)
+        assert_eq!(slice1, &[2, 3]);
+        //индексация с 0 для 2-х элементов
+        let actual = get_nth(slice1, 1);
+        assert_eq!(*actual, 3);
+        //еще
         let slice2 = &mut [1, 2, 3, 4, 5];
-        let actual = get_nth(slice1, 3);
         let actual2 = get_nth(slice2, 3);
-        assert_eq!(actual, &mut 4)
+        assert_eq!(*actual2, 4); //индексация с 0, на позиции[3] элемент[4]
     }
 
     #[test]
@@ -89,5 +96,28 @@ pub mod test {
         let slice = &mut [1, 2, 3, 4, 5];
         let actual = get_nth_reverse(slice, 4);
         assert_eq!(actual, &mut 2)
+    }
+
+    #[test]
+    fn split_slice_should_work_correctly() {
+        let slice: &[i32; 5] = &[1, 2, 3, 4, 5];
+        let (first, second) = split_slice(slice, 2);
+        assert_eq!(first, [1, 2]);
+        assert_eq!(second, [3, 4, 5]);
+    }
+
+    #[test]
+    fn get_slice_array_should_work_correctly() {
+        //четного размера массив
+        let even_size_slice = &[1, 2, 3, 4];
+        let actual1 = get_slice_array(even_size_slice);
+        assert_eq!(actual1, [[1], [2], [3], [4]]);
+
+        //нечетного размера массив
+        let odd_size_slice = &[1, 2, 3, 4, 5];
+        let actual2 = get_slice_array(odd_size_slice);
+        //для слайса из 5 элементов,результат таков, что:
+        assert_eq!(actual2[0..=2], [[1], [2], [3]]); //в первых трех элементах результата по одноразмерному слайсу
+        assert_eq!(actual2[3], [4, 5]); //в последнем  2
     }
 }
