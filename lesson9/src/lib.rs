@@ -104,10 +104,7 @@ pub mod test {
 
     #[test]
     fn get_nth_must_return_correct_value() {
-        let mut a = [1, 2, 3, 4, 5];
-        let slice1 = &mut a[1..3];
-        // проверяю, что не ошибся с предположением о содержимом слайса :-)
-        assert_eq!(slice1, &[2, 3]);
+        let slice1 = &mut [2, 3];
         //индексация с 0 для 2-х элементов
         let actual = get_nth(slice1, 1);
         assert_eq!(*actual, 3);
