@@ -6,8 +6,10 @@ fn main() {
     let slice = &mut [1, 2, 3, 4, 5];
     let actual = get_nth(slice, 4);
     println!("{}", actual);
-    //PLS HELP:неявный drop actual здесь ?
-    
+    //Неявный drop actual здесь ? ->
+    //Да. Компилятор видит, что actual не используется, после let actual2 = ...,
+    //и уничтожает ссылку, чтобы можно было повторно одолжить slice
+
     let actual2 = get_nth(slice, 4);
     println!("{}", actual2);
 

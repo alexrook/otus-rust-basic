@@ -60,8 +60,8 @@ pub fn get_nth_reverse<T>(slice: &mut [T], n: usize) -> &mut T {
 ///Принимает слайс и число N. Возвращает два слайса с элементами:
 ///с нулевого по N-1;  с N-го по последний;
 pub fn split_slice<T>(slice: &[T], n: usize) -> (&[T], &[T]) {
-    let first: &[T] = &slice[0..n];
-    let second: &[T] = &slice[n..slice.len()];
+    let first: &[T] = &slice[..n];
+    let second: &[T] = &slice[n..];
     (first, second)
 }
 

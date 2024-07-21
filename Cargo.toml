@@ -1,3 +1,4 @@
 [workspace]
 
 members = ["lesson3", "lesson9"]
+resolver = "2"
