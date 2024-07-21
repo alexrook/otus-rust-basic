@@ -6,14 +6,40 @@
 //! * Реализованы и протестированы все перечисленные функции.
 //! * `cargo clippy`` и `cargo fmt --check` не выдают предупреждений и ошибок.
 
+#[derive(Debug)]
+pub enum Either<A, B> {
+    Left(A),
+    Right(B),
+}
+
+impl<A: PartialEq, B: PartialEq> PartialEq for Either<A, B> {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Either::Left(a) => {
+                if let Either::Left(a1) = other {
+                    a == a1
+                } else {
+                    false
+                }
+            }
+            Either::Right(b) => {
+                if let Either::Right(b1) = other {
+                    b == b1
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
 /// Принимает мутабельную ссылку на кортеж и bool значение.
 /// * Если false, возвращает мутабельную ссылку на первый элемент кортежа.
 /// * Если true, возвращает мутабельную ссылку на второй элемент кортежа.
-pub fn get_elem<A, B>((a, b): &mut (A, B), flag: bool) -> Result<&mut A, &mut B> {
+pub fn get_elem<A, B>((a, b): &mut (A, B), flag: bool) -> Either<&mut A, &mut B> {
     if flag {
-        Ok(a)
+        Either::Left(a)
     } else {
-        Err(b)
+        Either::Right(b)
     }
 }
 
@@ -65,7 +91,7 @@ pub mod test {
         let mut tuple = ("e".to_string(), 2);
         let actual = get_elem(&mut tuple, true);
 
-        assert_eq!(actual, Ok(&mut "e".to_string()));
+        assert_eq!(actual, Either::Left(&mut "e".to_string()));
     }
 
     #[test]
@@ -73,7 +99,7 @@ pub mod test {
         let mut tuple = ("e".to_string(), 2);
         let actual = get_elem(&mut tuple, false);
 
-        assert_eq!(actual, Err(&mut 2));
+        assert_eq!(actual, Either::Right(&mut 2));
     }
 
     #[test]
