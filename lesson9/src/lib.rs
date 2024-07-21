@@ -68,17 +68,24 @@ pub fn split_slice<T>(slice: &[T], n: usize) -> (&[T], &[T]) {
 ///Принимает слайс и возвращает массив слайсов,
 ///содержащий четыре равные (насколько возможно) части исходного слайса.
 pub fn get_slice_array<T>(slice: &[T]) -> [&[T]; 4] {
+    let mut ret: [&[T]; 4] = [&[]; 4];
     let len: usize = slice.len();
-    let part_size: usize = len / 4;
-    [
-        &slice[0..part_size],
-        &slice[part_size..(part_size * 2)],
-        &slice[(part_size * 2)..(part_size * 3)],
-        &slice[(part_size * 3)..len],
-    ]
-}
-//     Протестировать функции.
+    let part_size: usize = if len / 4 > 0 { len / 4 } else { 1 };
 
+    for (i, chunk) in slice.chunks(part_size).enumerate() {
+        if i > 3 {
+            let remider = len % 4;
+            let pos = len - remider - part_size;
+            ret[3] = &slice[pos..]
+        } else {
+            ret[i] = chunk
+        }
+    }
+
+    ret
+}
+
+// Протестировать функции.
 #[cfg(test)]
 pub mod test {
 
@@ -109,9 +116,24 @@ pub mod test {
         let actual = get_nth(slice1, 1);
         assert_eq!(*actual, 3);
         //еще
-        let slice2 = &mut [1, 2, 3, 4, 5];
+        let slice2: &mut [i32; 5] = &mut [1, 2, 3, 4, 5];
         let actual2 = get_nth(slice2, 3);
         assert_eq!(*actual2, 4); //индексация с 0, на позиции[3] элемент[4]
+                                 //еще
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_nth_should_panic_for_empty_arrays() {
+        let slice: &mut [i32; 0] = &mut [];
+        let _ = get_nth(slice, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_nth_should_panic_for_bad_index() {
+        let slice: &mut [i32; 1] = &mut [1];
+        let _ = get_nth(slice, 2);
     }
 
     #[test]
@@ -153,5 +175,20 @@ pub mod test {
         //для слайса из 5 элементов,результат таков, что:
         assert_eq!(actual2[0..=2], [[1], [2], [3]]); //в первых трех элементах результата по одноразмерному слайсу
         assert_eq!(actual2[3], [4, 5]); //в последнем  2
+
+        let small_size_slice = &[1, 2, 3];
+
+        let actual3 = get_slice_array(small_size_slice);
+        assert_eq!(actual3[0..=2], [[1], [2], [3]]); //в первых трех элементах результата по одноразмерному слайсу
+        assert_eq!(actual3[3], [0; 0]);
+        //println!("{:?}", actual3);
+
+        let big_size_slice = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let actual4 = get_slice_array(big_size_slice);
+        println!("{:?}", actual4);
+
+        let large_size_slice = &[1; 101];
+        let actual5 = get_slice_array(large_size_slice);
+        println!("{:?}", actual5);
     }
 }
