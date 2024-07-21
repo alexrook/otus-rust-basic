@@ -52,7 +52,7 @@ pub fn get_nth<T>(slice: &mut [T], n: usize) -> &mut T {
 /// Принимает слайс и число N.
 /// Возвращает ссылку на N-ый элемент слайса с конца.
 pub fn get_nth_reverse<T>(slice: &mut [T], n: usize) -> &mut T {
-    let i: usize = slice.len() - n;
+    let i: usize = slice.len() - 1 - n;
     //println!("index[{}], n[{}], len[{}]", i, n, slice.len());
     &mut slice[i]
 }
@@ -87,7 +87,7 @@ pub mod test {
     use super::*;
 
     #[test]
-    fn get_elem_should_return_ok() {
+    fn get_elem_should_return_left() {
         let mut tuple = ("e".to_string(), 2);
         let actual = get_elem(&mut tuple, true);
 
@@ -95,7 +95,7 @@ pub mod test {
     }
 
     #[test]
-    fn get_elem_should_return_err() {
+    fn get_elem_should_return_right() {
         let mut tuple = ("e".to_string(), 2);
         let actual = get_elem(&mut tuple, false);
 
@@ -117,8 +117,19 @@ pub mod test {
     #[test]
     fn get_nth_reverse_return_correct_value() {
         let slice = &mut [1, 2, 3, 4, 5];
-        let actual = get_nth_reverse(slice, 4);
-        assert_eq!(actual, &mut 2)
+
+        assert_eq!(*get_nth_reverse(slice, 0), 5);
+        assert_eq!(*get_nth_reverse(slice, 1), 4);
+        assert_eq!(*get_nth_reverse(slice, 2), 3);
+        assert_eq!(*get_nth_reverse(slice, 3), 2);
+        assert_eq!(*get_nth_reverse(slice, 4), 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_nth_reverse_should_panic_when_index_is_greater_then_length() {
+        let slice = &mut [1, 2, 3, 4, 5];
+        assert_eq!(*get_nth_reverse(slice, 5), 5); //Boom
     }
 
     #[test]
