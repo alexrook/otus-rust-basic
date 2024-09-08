@@ -36,7 +36,7 @@ impl<E: Num + Copy, const N: usize> Vector<E, N> {
     pub fn len(&self) -> E {
         let mut acc: E = E::default();
         for x in self.holder.iter() {
-            acc = acc + x.clone() * x.clone()
+            acc = acc + *x * *x
         }
         acc
     }
@@ -46,7 +46,7 @@ impl<E: Num + Copy, const N: usize> Vector<E, N> {
     pub fn sum(&mut self, b: Vector<E, N>) -> Vector<E, N> {
         let mut ret = Self::from([E::default(); N]);
         for (i, e) in self.holder.iter().enumerate() {
-            ret.holder[i] = e.clone() + b.holder[i].clone()
+            ret.holder[i] = *e + b.holder[i]
         }
         ret
     }
@@ -55,7 +55,7 @@ impl<E: Num + Copy, const N: usize> Vector<E, N> {
     pub fn scalar_mul(&self, b: E) -> Vector<E, N> {
         let mut ret = Self::from([E::default(); N]);
         for (i, e) in self.holder.iter().enumerate() {
-            ret.holder[i] = e.clone() * b
+            ret.holder[i] = *e * b
         }
         ret
     }
