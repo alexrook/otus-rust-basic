@@ -1,4 +1,4 @@
 [workspace]
 
-members = ["lesson3", "lesson9","lesson17"]
+members = ["lesson3", "lesson9","lesson17", "lesson25"]
 resolver = "2"
