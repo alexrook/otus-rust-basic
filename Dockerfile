@@ -1,4 +1,4 @@
-FROM rust:1.79.0-buster
+FROM rust:1.81-bookworm
 
 ARG USERNAME=moroz
 ARG USER_UID=1000
@@ -8,8 +8,9 @@ ARG USER_GID=$USER_UID
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
     #
-    # [Optional] Add sudo support. Omit if you don't need to install software after connecting.
+    # [Optional] Add git and sudo support. Omit if you don't need to install software after connecting.
     && apt-get update \
+    && apt-get install -y git \
     && apt-get install -y sudo \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
