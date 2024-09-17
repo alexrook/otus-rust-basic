@@ -52,7 +52,7 @@ impl AsRef<str> for Cat {
 impl TryFrom<Pet> for Cat {
     type Error = &'static str;
     fn try_from(value: Pet) -> Result<Self, Self::Error> {
-        if let Pet::Cat { name, age } = value {
+        if let Pet::Cat(Cat { name, age }) = value {
             Ok(Cat { name, age })
         } else {
             Err("The Pet doesn't contain cat")
@@ -77,14 +77,16 @@ impl AddAssign<u16> for Cat {
 }
 
 pub enum Pet {
-    Cat { name: String, age: u16 },
+    Cat(Cat),
     Dog { name: String, age: u16 },
 }
 
 impl Display for Pet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Cat { name, age } => write!(f, "A Cat({},{}), a variant of the Pet", name, age),
+            Self::Cat(Cat { name, age }) => {
+                write!(f, "A Cat({},{}), a variant of the Pet", name, age)
+            }
             Self::Dog { name, age } => write!(f, "A Dog({},{}), a variant of the Pet", name, age),
         }
     }
@@ -92,9 +94,9 @@ impl Display for Pet {
 
 impl From<Cat> for Pet {
     fn from(value: Cat) -> Self {
-        Self::Cat {
+        Self::Cat(Cat {
             name: value.name,
             age: value.age,
-        }
+        })
     }
 }

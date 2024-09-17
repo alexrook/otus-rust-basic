@@ -18,10 +18,7 @@ fn main() -> Result<(), &'static str> {
         smelly_cat_older
     );
 
-    let cat_pet: Pet = Pet::Cat {
-        name: "Cheshire".to_string(),
-        age: 120,
-    };
+    let cat_pet: Pet = Pet::Cat(Cat::new("Cheshire".to_string(), 120));
 
     let cheshire_cat: Result<Cat, &'static str> = cat_pet.try_into();
 
