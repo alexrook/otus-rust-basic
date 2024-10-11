@@ -14,7 +14,7 @@
 //!  - добавлять элемент после N-го,
 //!  - Разделяться на два списка: от начального элемента до (N-1)-го и от (N-1)-го до последнего.
 //!  - Предоставлять возможность изменять элементы списка.
-//!  - Так как каждый элемент списка содержит ссылку на следующий,
+//! Так как каждый элемент списка содержит ссылку на следующий,
 //!     Rust не даст нам менять элементы списка
 //!         (правило заимствования о одной мутабельной ссылке).
 //!         Для преодоления этого ограничения можно использовать обёртку Rc<RefCell>.
@@ -27,10 +27,37 @@
 //! 3. Написан пример кода, демонстрирующий функционал списка.
 //! 4. `cargo clippy`` и `cargo fmt --check`` не выдают предупреждений и ошибок.
 
-pub mod AnyEx;
-pub mod LinkedList_v1;
-pub mod LinkedList_v2;
-//pub mod LinkedList_v3;
-pub mod LinkedList_v4;
-//pub mod LinkedList_v5;
-pub mod Iter1;
+use std::rc::Rc;
+
+pub trait LinkedList<T>: IntoIterator {}
+
+struct Cons<T> {
+    head: Option<Rc<T>>,
+    tail: Option<Rc<Cons<T>>>,
+}
+
+struct ConsIter<T>(Option<Rc<Cons<T>>>);
+
+impl<T> Iterator for ConsIter<T> {
+    type Item = Rc<T>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0.clone() {
+            None => None,
+            Some(rc) => {
+                self.0 = rc.tail.clone();
+                rc.head.clone()
+            }
+        }
+    }
+}
+
+impl<T> IntoIterator for Cons<T> {
+    type Item = Rc<T>;
+    type IntoIter = ConsIter<T>;
+    fn into_iter(self) -> Self::IntoIter {
+        ConsIter(Some(self.into()))
+    }
+}
+
+impl<T> LinkedList<T> for Cons<T> {}
+
