@@ -1,4 +1,5 @@
 use std::rc::Rc;
+
 #[derive(Debug)]
 pub enum LinkedList<T> {
     Cons {
@@ -80,6 +81,9 @@ impl<T> LinkedList<T> {
             })
     }
 
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter(self)
+    }
     //private
     fn append_loop(xa: Rc<LinkedList<T>>, v: Rc<T>) -> LinkedList<T> {
         match &*xa {
@@ -94,6 +98,21 @@ impl<T> LinkedList<T> {
                 head: v,
                 tail: Rc::new(LinkedList::Nil),
             },
+        }
+    }
+}
+
+pub struct Iter<'a, T>(&'a LinkedList<T>);
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.0 {
+            LinkedList::Cons { head, tail } => {
+                self.0 = &tail;
+                Some(&head)
+            }
+            LinkedList::Nil => None,
         }
     }
 }
@@ -140,6 +159,24 @@ mod tests {
         for (idx, x) in list.into_iter().enumerate() {
             assert_eq!(idx + 1, *x)
         }
+    }
+
+    #[test]
+    fn test_iter() {
+        let list = LinkedList::new().prepend(1).prepend(2).prepend(3);
+
+        list.iter().zip([3, 2, 1]).for_each(|(x, y)| {
+            assert_eq!(*x, y);
+        });
+
+        let list = LinkedList::new()
+            .prepend(String::from("A"))
+            .prepend(String::from("B"))
+            .prepend(String::from("C"));
+
+        list.iter().zip(["C", "B", "A"]).for_each(|(x, y)| {
+            assert_eq!(*x, y);
+        });
     }
 
     #[test]
