@@ -27,10 +27,10 @@
 //! 3. Написан пример кода, демонстрирующий функционал списка.
 //! 4. `cargo clippy`` и `cargo fmt --check`` не выдают предупреждений и ошибок.
 
-pub mod AnyEx;
-pub mod LinkedList_v1;
-pub mod LinkedList_v2;
-//pub mod LinkedList_v3;
-pub mod LinkedList_v4;
-//pub mod LinkedList_v5;
-pub mod Iter1;
+pub mod any_ex;
+pub mod iter_1;
+pub mod linked_list_v1;
+pub mod linked_list_v2;
+//pub mod linked_list_v3;
+pub mod linked_list_v4;
+//pub mod linked_list_v5;
