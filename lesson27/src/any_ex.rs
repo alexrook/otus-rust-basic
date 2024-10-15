@@ -1,6 +1,6 @@
 use std::any::Any;
 
-trait AAA: Any {
+pub trait AAA: Any {
     fn as_any(&self) -> &dyn Any;
 }
 

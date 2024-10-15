@@ -27,7 +27,7 @@
 //! 3. Написан пример кода, демонстрирующий функционал списка.
 //! 4. `cargo clippy`` и `cargo fmt --check`` не выдают предупреждений и ошибок.
 
-use std::{path::Iter, rc::Rc};
+use std::rc::Rc;
 
 pub trait LinkedList<T> {
     fn as_cons(&mut self) -> Option<&mut Cons<T>>;
@@ -57,7 +57,7 @@ pub trait LinkedList<T> {
 // struct LinkedListIter<T>(Rc<dyn LinkedList<T>>);
 
 // impl<T> Iterator for LinkedListIter<T> {
-    
+
 // }
 
 // impl<T> Iterator for dyn LinkedList<T> {
@@ -77,8 +77,8 @@ pub trait LinkedList<T> {
 //     }
 // }
 pub struct Cons<T> {
-    head: Rc<T>,
-    tail: Rc<dyn LinkedList<T>>,
+    pub head: Rc<T>,
+    pub tail: Rc<dyn LinkedList<T>>,
 }
 
 impl<T> LinkedList<T> for Cons<T> {
@@ -121,14 +121,14 @@ mod tests {
     use super::*;
     #[test]
     fn test_creation() {
-        let empty = <dyn LinkedList<u32>>::empty();
+        let _ = <dyn LinkedList<u32>>::empty();
         let one = <dyn LinkedList<u32>>::one(42);
         let one_str = Cons {
             head: Rc::new("AAA".to_string()),
             tail: Rc::new(Nil),
         };
 
-        let two = <dyn LinkedList<u32>>::new(154, Rc::new(one));
-        let two_str = <dyn LinkedList<String>>::new("BBB".to_string(), Rc::new(one_str));
+        let _ = <dyn LinkedList<u32>>::new(154, Rc::new(one));
+        let _ = <dyn LinkedList<String>>::new("BBB".to_string(), Rc::new(one_str));
     }
 }
