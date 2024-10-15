@@ -60,4 +60,3 @@ impl<T> IntoIterator for Cons<T> {
 }
 
 impl<T> LinkedList<T> for Cons<T> {}
-
