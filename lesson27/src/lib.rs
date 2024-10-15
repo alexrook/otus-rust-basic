@@ -34,3 +34,4 @@ pub mod linked_list_v2;
 pub mod linked_list_v3;
 pub mod linked_list_v4;
 pub mod linked_list_v5;
+pub mod linked_list_v6;
