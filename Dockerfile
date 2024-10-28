@@ -18,6 +18,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 RUN rustup component add rustfmt
 RUN rustup component add clippy
+RUN cargo install cargo-expand
 
 # ********************************************************
 # * Anything else you want to do like clean up goes here *
