@@ -1,25 +1,4 @@
-use lesson19::even_func_name;
-
-fn main() {
-    let r = even_func_name!(fo(), foo, bar, one_more_time_);
-    println!("{:?}", r);
-}
-
-pub fn fo() -> u32 {
-    42
-}
-
-pub fn foo() -> u32 {
-    43
-}
-
-pub fn bar() -> String {
-    "42".to_owned()
-}
-
-pub fn one_more_time_() -> String {
-    "Never again is what you swore the time before".to_owned()
-}
+fn main() {}
 
 #[macro_export]
 macro_rules! say_hello {
@@ -52,6 +31,13 @@ mod tests {
 
     #[test]
     fn even_func_name_should_work_with_fn() {
+        let (ret_fo, ret_omt) = even_func_name!(fo, foo, bar, one_more_time_);
+        assert_eq!(ret_fo, 42);
+        assert_eq!(ret_omt, "It's amaizing");
+    }
+
+    #[test]
+    fn even_func_name_v2_should_work_with_fn() {
         let (ret_fo, ret_omt) = even_func_name!(fo, foo, bar, one_more_time_);
         assert_eq!(ret_fo, 42);
         assert_eq!(ret_omt, "It's amaizing");
