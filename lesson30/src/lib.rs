@@ -32,23 +32,9 @@ pub enum Operation {
      * Попытка снять больше чем есть на счете - ошибка.
      */
     Withdraw(NonZeroMoney), //снятие
-
-                            // Перевод уменьшает баланс отправителя и увеличивает баланс получателя на указанную сумму.
-                            //   Перевод нуля денежных единиц - ошибка.
-                            //   Перевод самому себе - ошибка.
-                            // Если сумма перевода больше баланса отправителя - ошибка.
+                            //перевол реализован через сумму операций Withdraw + Charge
 }
 
-//  Каждая операция (регистрация счёта, пополнение, снятие, перевод) должна сохраняться.
-//  Каждая успешная операция возвращает уникальный идентификатор,
-//  по которому данные об этой операции могут быть в дальнейшем запрошены.
-//  Можно получить всю историю операций.
-//  Можно получить историю операций связанных с конкретным счётом.
-//  Операции должны храниться в порядке их выполнения.
-//  Есть возможность восстановить состояние счетов,
-//  повторно выполнив все операции из истории в новом экземпляре банка.
-//  После этого новый экземпляр банка должен совпадать с тем,
-//  историю которого мы использовали
 pub trait OpsStorage {
     fn transact(
         &mut self,
@@ -471,8 +457,8 @@ mod test {
             .move_money(acc_1.clone(), acc_2.clone(), NonZeroMoney::new(42).unwrap())
             .expect("should be Ok(iter)");
 
-        let (_, first) = iter.next().expect("should be the acc_1 their Account");
-        let (_, second) = iter.next().expect("should be the acc_2 their Account");
+        let (_, first) = iter.next().expect("should be the acc_1 with their Account");
+        let (_, second) = iter.next().expect("should be the acc_2 with their Account");
         assert_eq!(first, &Account { balance: 0 });
         assert_eq!(second, &Account { balance: 42 });
         let _: Vec<(_, _)> = iter.collect(); //drain iter
