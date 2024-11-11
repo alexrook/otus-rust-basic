@@ -106,6 +106,32 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
             state: state,
         }
     }
+
+    pub fn from<'a>(history: impl Iterator<Item = (OpId, (AccountId, &'a Operation))>) -> Bank<T, S>
+    where
+        S: Default,
+        T: Default,
+    {
+        let mut bank = Bank {
+            storage: T::default(),
+            state: S::default(),
+        };
+
+        for (_, (account_id, op)) in history {
+            let (_, op) = bank
+                .storage
+                .persist(account_id.clone(), op.clone())
+                .expect(format!("something wrong with history operation[{:?}]", op).as_str());
+            let ret = bank.state.update(account_id, op);
+
+            //let _ = ret.expect("History operation has error");
+            ret.err()
+                .iter()
+                .for_each(|err| println!("History operation has error[{:?}]", err));
+        }
+
+        bank
+    }
 }
 
 impl<T: OpsStorage, S: State> Bank<T, S> {
@@ -119,6 +145,12 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     //Клиент может получить свой баланс.
     pub fn get_balance(&self, account_id: &AccountId) -> Result<&Account, Err> {
         self.state.get_balance(account_id)
+    }
+
+    pub fn get_history(
+        &self,
+    ) -> Result<impl Iterator<Item = (OpId, (String, &Operation))>, String> {
+        self.storage.get_history()
     }
 
     //Клиент может пополнить свой баланс.
@@ -313,6 +345,7 @@ impl OpsStorage for InMemoryOpsStorage {
     }
 }
 
+#[cfg(test)]
 mod test {
 
     use super::*;
@@ -431,7 +464,7 @@ mod test {
     }
 
     #[test]
-    fn bank_get_balance() {
+    fn bank_should_get_balance() {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
@@ -457,5 +490,40 @@ mod test {
         assert_eq!(ret, &Account { balance: 0 });
         let ret = bank.get_balance(&acc_3).expect("should be Account 3");
         assert_eq!(ret, &Account { balance: 21 });
+    }
+
+    #[test]
+    fn bank_should_get_history() {
+        let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
+            Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
+
+        let acc_1 = "Acc_1".to_string();
+        let acc_2 = "Acc_2".to_string();
+        let acc_3 = "Acc_3".to_string();
+
+        let _ = bank.create_account(acc_1.clone());
+        let _ = bank.create_account(acc_2.clone());
+        let _ = bank.create_account(acc_3.clone());
+
+        let ret: Result<&Account, String> =
+            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        assert_eq!(ret, Ok(&Account { balance: 42 }));
+
+        let ret: Result<&Account, String> =
+            bank.deposit(acc_3.clone(), NonZeroMoney::new(21).unwrap());
+        assert_eq!(ret, Ok(&Account { balance: 21 }));
+
+        let history = bank.get_history().expect("Bank should get history");
+
+        let clone_of_bank: Bank<InMemoryOpsStorage, InMemoryState> = Bank::from(history);
+
+        let ret = clone_of_bank.get_balance(&acc_1);
+        assert_eq!(ret, Ok(&Account { balance: 42 }));
+
+        let ret = clone_of_bank.get_balance(&acc_2);
+        assert_eq!(ret, Ok(&Account { balance: 0 }));
+
+        let ret = clone_of_bank.get_balance(&acc_3);
+        assert_eq!(ret, Ok(&Account { balance: 21 }));
     }
 }
