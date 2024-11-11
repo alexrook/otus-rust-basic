@@ -1,0 +1,13 @@
+[lib]
+proc-macro = true
+path = "src/pm/lib.rs"
+
+[package]
+name = "lesson19"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+syn = "2.0"    # Для анализа синтаксического дерева
+quote = "1.0"   # Для генерации Rust-кода
+
