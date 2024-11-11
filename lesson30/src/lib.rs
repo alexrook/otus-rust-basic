@@ -384,17 +384,17 @@ mod test {
         let _ = bank.create_account(acc_2.clone());
 
         let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::MIN.checked_add(41).unwrap());
+            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
 
         assert_eq!(ret, Ok(&Account { balance: 42 }));
 
         let ret: Result<&Account, String> =
-            bank.deposit(acc_2.clone(), NonZeroMoney::MIN.checked_add(41).unwrap());
+            bank.deposit(acc_2.clone(), NonZeroMoney::new(42).unwrap());
 
         assert_eq!(ret, Ok(&Account { balance: 42 }));
 
         let ret: Result<&Account, String> = //acc_1 again
-            bank.deposit(acc_1.clone(), NonZeroMoney::MIN.checked_add(41).unwrap());
+            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
 
         assert_eq!(ret, Ok(&Account { balance: 84 }));
     }
@@ -411,11 +411,11 @@ mod test {
         let _ = bank.create_account(acc_2.clone());
 
         let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::MIN.checked_add(41).unwrap());
+            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
         assert_eq!(ret, Ok(&Account { balance: 42 }));
 
         let ret: Result<&Account, String> =
-            bank.deposit(acc_2.clone(), NonZeroMoney::MIN.checked_add(41).unwrap());
+            bank.deposit(acc_2.clone(), NonZeroMoney::new(42).unwrap());
         assert_eq!(ret, Ok(&Account { balance: 42 }));
 
         let ret: Result<&Account, String> = bank.withdraw(acc_1.clone(), NonZeroMoney::MIN);
