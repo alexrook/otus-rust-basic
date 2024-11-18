@@ -25,14 +25,14 @@ pub enum Operation {
     /**Пополнение увеличивает количество денег на счете на указанную сумму.
      * Пополнение на ноль денежных единиц - ошибка.
      */
-    Charge(NonZeroMoney), //пополнение
+    Deposit(NonZeroMoney), //пополнение
     /**
      * Снятие уменьшает количество денег на счете на указанную сумму.
      * Снятие нуля денежных единиц - ошибка.
      * Попытка снять больше чем есть на счете - ошибка.
      */
     Withdraw(NonZeroMoney), //снятие
-                            //перевол реализован через сумму операций Withdraw + Charge
+                            //перевол реализован через сумму операций Withdraw + Deposit
 }
 
 pub trait OpsStorage {
@@ -42,7 +42,7 @@ pub trait OpsStorage {
     ) -> Result<impl Iterator<Item = (OpId, AccountId, &Operation)>, Err>;
 
     fn persist(&mut self, account_id: AccountId, op: Operation) -> Result<(OpId, &Operation), Err> {
-        self.transact(vec![(account_id, op)].into_iter())
+        self.transact(std::iter::once((account_id, op)))
             .and_then(|mut iter| {
                 iter.next()
                     .map(|(opt_id, _, op)| (opt_id, op))
@@ -69,7 +69,7 @@ pub trait State {
         account_id: AccountId,
         op: &'b Operation,
     ) -> Result<&'a Account, Err> {
-        self.transact(vec![(account_id, op)].into_iter())
+        self.transact(std::iter::once((account_id, op)))
             .and_then(|mut iter| {
                 iter.next()
                     .map(|(_, acc)| acc)
@@ -87,10 +87,7 @@ pub struct Bank<T: OpsStorage, S: State> {
 
 impl<T: OpsStorage, S: State> Bank<T, S> {
     pub fn new(storage: T, state: S) -> Bank<T, S> {
-        Bank {
-            storage: storage,
-            state: state,
-        }
+        Bank { storage, state }
     }
 
     pub fn from<'a>(history: impl Iterator<Item = (OpId, (AccountId, &'a Operation))>) -> Bank<T, S>
@@ -110,17 +107,14 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
                 .expect(format!("something wrong with history operation[{:?}]", op).as_str());
             let ret = bank.state.update(account_id, op);
 
-            //let _ = ret.expect("History operation has an error");
-            ret.err()
-                .iter()
-                .for_each(|err| println!("History operation has an error[{:?}]", err));
+            if let Some(err) = ret.err() {
+                println!("History operation has an error[{:?}]", err)
+            }
         }
 
         bank
     }
-}
 
-impl<T: OpsStorage, S: State> Bank<T, S> {
     //создание аккаунта
     pub fn create_account(&mut self, account_id: AccountId) -> Result<&Account, Err> {
         let op = Operation::Create(account_id.clone());
@@ -152,7 +146,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
 
     //Клиент может пополнить свой баланс.
     pub fn deposit(&mut self, account_id: AccountId, money: NonZeroMoney) -> Result<&Account, Err> {
-        let op = Operation::Charge(money);
+        let op = Operation::Deposit(money);
         let (_, op) = self.storage.persist(account_id.clone(), op)?;
         self.state.update(account_id, op)
     }
@@ -175,13 +169,13 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         to: AccountId,
         money: NonZeroMoney,
     ) -> Result<impl Iterator<Item = (AccountId, &Account)>, Err> {
-        if from.eq_ignore_ascii_case(to.as_str()) {
+        if from.eq(to.as_str()) {
             return Err(format!("Sending funds to yourself is prohibited"));
         }
 
         let ops = vec![
             (from, Operation::Withdraw(money)),
-            (to, Operation::Charge(money)),
+            (to, Operation::Deposit(money)),
         ]
         .into_iter();
         //first save to storage
@@ -214,7 +208,7 @@ impl<'a> InMemoryState {
                 self.0.insert(account_id.clone(), new_account);
             }
 
-            Operation::Charge(money) if self.0.contains_key(&account_id) => {
+            Operation::Deposit(money) if self.0.contains_key(&account_id) => {
                 // self.0
                 //     .entry(account_id) //поглощает ключ
                 //     .and_modify(|account| account.balance += money.get());
@@ -576,10 +570,10 @@ mod test {
 
         let ret = bank.get_account_ops(&acc_1);
         assert!(ret.is_ok());
-        assert_eq!(ret.unwrap().count(), 3); //Create + Charge + Withdraw
+        assert_eq!(ret.unwrap().count(), 3); //Create + Deposit + Withdraw
 
         let ret = bank.get_account_ops(&acc_2);
         assert!(ret.is_ok());
-        assert_eq!(ret.unwrap().count(), 3); //Create + Charge + Charge
+        assert_eq!(ret.unwrap().count(), 3); //Create + Deposit + Deposit
     }
 }
