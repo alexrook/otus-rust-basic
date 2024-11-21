@@ -32,7 +32,7 @@ pub enum Operation {
      * Попытка снять больше чем есть на счете - ошибка.
      */
     Withdraw(NonZeroMoney), //снятие
-                            //перевол реализован через сумму операций Withdraw + Deposit
+                            //перевод реализован через сумму операций Withdraw + Deposit
 }
 
 pub trait OpsStorage {
