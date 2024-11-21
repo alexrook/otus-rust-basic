@@ -1,8 +1,8 @@
 FROM rust:1.81-bookworm
 
-ARG USERNAME=moroz
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
 
 # Create the user
 RUN groupadd --gid $USER_GID $USERNAME \
@@ -15,10 +15,11 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-
 RUN rustup component add rustfmt
 RUN rustup component add clippy
 RUN cargo install cargo-expand
+
+RUN chown -R ${USERNAME} '/usr/local/cargo/'
 
 # ********************************************************
 # * Anything else you want to do like clean up goes here *

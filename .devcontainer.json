@@ -1,7 +1,12 @@
 {
   "build": {
     // Path is relative to the devcontainer.json file.
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "args": {
+      "USERNAME": "moroz",
+      "USER_UID": "1000",
+      "USER_GID": "1000"
+    }
   },
   "customizations": {
     // Configure properties specific to VS Code.
