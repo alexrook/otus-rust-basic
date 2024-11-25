@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::core::*;
 
 const MAX_ACCOUNT_ID_LEN: usize = 16;
@@ -9,6 +11,7 @@ const TYPE_ID_OPERATION_CREATE: TypeIdMark = 1;
 const TYPE_ID_OPERATION_DEPOSIT: TypeIdMark = 2;
 const TYPE_ID_OPERATION_WITHDRAW: TypeIdMark = 3;
 
+#[derive(Debug)]
 pub struct Cursor {
     pub pos: usize,
 }
@@ -90,6 +93,39 @@ impl Serializable for Operation {
 
 pub trait Deserializable<T, E> {
     fn deserialize(data: &[u8]) -> Result<T, E>;
+
+    fn unmarshall<C, F, I>(is_expected_type_id: C, data: &[u8], unmarshaller: F) -> Result<T, E>
+    where
+        E: From<String>,
+        C: FnOnce(&TypeIdMark) -> bool,
+        I: Debug,
+        F: FnOnce(&TypeIdMark, &[u8]) -> std::result::Result<T, I>,
+    {
+        let type_id: &TypeIdMark = data
+            .get(0)
+            .filter(|type_id| is_expected_type_id(type_id))
+            .ok_or(E::from(format!(
+                "The first byte in data isn't specified or isn't equal to the expected type id"
+            )))?;
+
+        let len: usize = data.get(1).map(|x| *x as usize).ok_or(E::from(
+            "The second byte in data should be equal next data length".to_string(),
+        ))?;
+
+        let shift = 1 + 1; // first + second
+        let end = shift + len;
+        data.get(shift..end)
+            .ok_or(E::from(format!(
+                "The array should contain enough bytes for get operation[{}..{}]",
+                shift, end
+            )))
+            .and_then(|next: &[u8]| {
+                unmarshaller(type_id, next).map_err(|err| {
+                    format!("An error occurred while string deserialization[{:?}]", err).into()
+                })
+            })
+            .map(|ret| (ret, Cursor { pos: end }))
+    }
 }
 
 impl<E> Deserializable<String, E> for AccountId
@@ -97,68 +133,73 @@ where
     E: From<String>,
 {
     fn deserialize(data: &[u8]) -> Result<String, E> {
-        data.get(0)
-            .map(|type_id| *type_id == TYPE_ID_ACCOUNT_ID)
-            .filter(|b| *b)
-            .ok_or(E::from(
-                format!("The first byte in array isn't specified or isn't equal to the expected[{}] type id",TYPE_ID_ACCOUNT_ID)                    ,
-            ))?;
-
-        let len: usize = data.get(1).map(|x| *x as usize).ok_or(E::from(
-            "The second byte in array should be equal next data length".to_string(),
-        ))?;
-
-        let shift = 1 + 1; // first + second
-        let end = shift + len;
-
-        data.get(shift..end)
-            .ok_or(E::from(format!(
-                "The array should contain enough bytes for get operation[{}..{}]",
-                shift, end
-            )))
-            .and_then(|next: &[u8]| {
-                std::str::from_utf8(next).map_err(|err| {
-                    format!("An error occurred while string deserialization[{}]", err).into()
-                })
-            })
-            .map(|str| (str.to_string(), Cursor { pos: end }))
+        Self::unmarshall(
+            |type_id| *type_id == TYPE_ID_ACCOUNT_ID,
+            data,
+            |_, next: &[u8]| std::str::from_utf8(next).map(|str| str.to_string()),
+        )
     }
 }
 
-// impl<E> Deserializable<Operation, E> for Operation
-// where
-//     E: From<String>,
-// {
-//     fn read(type_id: u8, size: usize, data: &[u8]) -> Result<Operation, E> {
-//         match type_id {
-//             1 => {
-//                 let account_id: AccountId = AccountId::read(type_id, size, data)?;
-//                 Ok(Operation::Create(account_id))
-//             }
-//             2 => {
-//                 assert_eq!(size, 4); //bcs NonZeroU32
-//                 let mut array = [0u8; 4];
-//                 array.copy_from_slice(data);
-//                 let from_bytes_value = u32::from_be_bytes(array);
-//                 let non_zero_money: NonZeroMoney = NonZeroMoney::new(from_bytes_value).ok_or(
-//                     "An error occured while from array to NonZeroMoney conversion".to_owned(),
-//                 )?;
-//                 Ok(Operation::Deposit(non_zero_money))
-//             }
-//             3 => {
-//                 assert_eq!(size, 4);
-//                 let mut array = [0u8; 4];
-//                 array.copy_from_slice(data);
-//                 let from_bytes_value = u32::from_be_bytes(array);
-//                 let non_zero_money: NonZeroMoney = NonZeroMoney::new(from_bytes_value).ok_or(
-//                     "An error occured while from array to NonZeroMoney conversion".to_owned(),
-//                 )?;
-//                 Ok(Operation::Withdraw(non_zero_money))
-//             }
-//             other => Err(format!("unsupported type_id[{}]", other).into()),
-//         }
-//     }
-// }
+impl<E> Deserializable<NonZeroMoney, E> for NonZeroMoney
+where
+    E: From<String> + Debug,
+{
+    fn deserialize(data: &[u8]) -> Result<NonZeroMoney, E> {
+        Self::unmarshall(
+            |type_id| *type_id == TYPE_ID_NONZERO_MONEY,
+            data,
+            |_, next: &[u8]| {
+                let mut array = [0u8; 4];
+                array.copy_from_slice(next);
+                let from_bytes_value = u32::from_be_bytes(array);
+                NonZeroMoney::new(from_bytes_value).ok_or(E::from(
+                    "An error occured while from array to NonZeroMoney conversion".to_owned(),
+                ))
+            },
+        )
+    }
+}
+
+impl<E> Deserializable<Operation, E> for Operation
+where
+    E: From<String> + Debug,
+{
+    fn deserialize(data: &[u8]) -> Result<Operation, E> {
+        Self::unmarshall(
+            |type_id| {
+                [
+                    TYPE_ID_OPERATION_CREATE,
+                    TYPE_ID_OPERATION_DEPOSIT,
+                    TYPE_ID_OPERATION_WITHDRAW,
+                ]
+                .contains(type_id)
+            },
+            data,
+            |type_id, next| match *type_id {
+                1 => AccountId::deserialize(next)
+                    .map(|(account_id, _)| Operation::Create(account_id)),
+                2 => NonZeroMoney::deserialize(next)
+                    .map(|(non_zero_money, _)| Operation::Deposit(non_zero_money))
+                    .map_err(|err: E| {
+                        format!(
+                            "An error[{:?}] occurred while Operation::Deposit deserialization",
+                            err
+                        )
+                    }),
+                3 => NonZeroMoney::deserialize(next)
+                    .map(|(non_zero_money, _)| Operation::Withdraw(non_zero_money))
+                    .map_err(|err: E| {
+                        format!(
+                            "An error[{:?}] occurred while Operation::Withdraw deserialization",
+                            err
+                        )
+                    }),
+                other => Err(format!("unsupported type_id[{}]", other).into()),
+            },
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -167,54 +208,33 @@ mod tests {
 
     #[test]
     fn serialize_account_id_should_work() {
-        let initial: AccountId = "Hello Rust".to_string();
+        fn test(initial: String) {
+            let serialized: Vec<u8> = initial.serialize();
 
-        let serialized: Vec<u8> = initial.serialize();
-
-        assert_eq!(
-            serialized.len(),
-            size_of::<TypeIdMark>() + size_of::<u8>() + initial.as_bytes().len()
-        );
-
-        let initial: AccountId = "".to_string();
-
-        let serialized: Vec<u8> = initial.serialize();
-
-        assert_eq!(
-            serialized.len(),
-            size_of::<TypeIdMark>() + size_of::<u8>() + initial.as_bytes().len()
-        );
+            assert_eq!(
+                serialized.len(),
+                size_of::<TypeIdMark>() + size_of::<u8>() + initial.as_bytes().len()
+            );
+        }
+        test("Hello Rust".to_string());
+        test("".to_string());
     }
 
     #[test]
     fn serialize_non_zero_money_should_work() {
-        let initial: NonZeroMoney = NonZeroMoney::MAX;
+        fn test(initial: NonZeroMoney) {
+            let serialized: Vec<u8> = initial.serialize();
 
-        let serialized: Vec<u8> = initial.serialize();
+            assert_eq!(
+                serialized.len(),
+                size_of::<TypeIdMark>() + size_of::<u8>() + size_of::<NonZeroMoney>()
+            );
+            //     🠉 money type        +    🠉 len      +    🠉 bytes(4)
+        }
 
-        assert_eq!(
-            serialized.len(),
-            size_of::<TypeIdMark>() + size_of::<u8>() + size_of::<NonZeroMoney>()
-        );
-        //     🠉 money type        +    🠉 len      +    🠉 bytes(4)
-
-        let initial: NonZeroMoney = NonZeroMoney::MIN;
-
-        let serialized: Vec<u8> = initial.serialize();
-
-        assert_eq!(
-            serialized.len(),
-            size_of::<TypeIdMark>() + size_of::<u8>() + size_of::<NonZeroMoney>()
-        );
-
-        let initial: NonZeroMoney = NonZeroMoney::new(42).unwrap();
-
-        let serialized: Vec<u8> = initial.serialize();
-
-        assert_eq!(
-            serialized.len(),
-            size_of::<TypeIdMark>() + size_of::<u8>() + size_of::<NonZeroMoney>()
-        );
+        test(NonZeroMoney::MAX);
+        test(NonZeroMoney::MIN);
+        test(NonZeroMoney::new(42).unwrap());
     }
 
     #[test]
@@ -264,14 +284,77 @@ mod tests {
 
     #[test]
     fn deserialize_account_id_should_work() {
-        let initial: AccountId = "Hello Rust".to_string();
+        fn test(initial: AccountId) {
+            let serialized: Vec<u8> = initial.serialize();
+            let actual: Result<String, String> = AccountId::deserialize(&serialized);
 
-        let serialized: Vec<u8> = initial.serialize();
+            assert!(actual.is_ok());
+            assert_eq!(initial, actual.unwrap().0);
+        }
 
-        let actual: Result<String, String> = AccountId::deserialize(&serialized);
+        test("Hello Rust".to_string());
+        test("".to_string());
+    }
 
-        assert!(actual.is_ok());
+    #[test]
+    fn deserialize_non_zero_money_should_work() {
+        fn test(initial: NonZeroMoney) {
+            let serialized: Vec<u8> = initial.serialize();
 
-        assert_eq!(initial, actual.unwrap().0);
+            let actual: Result<NonZeroMoney, String> = NonZeroMoney::deserialize(&serialized);
+
+            assert!(actual.is_ok());
+            assert_eq!(initial, actual.unwrap().0);
+        }
+
+        test(NonZeroMoney::new(42).unwrap());
+        test(NonZeroMoney::MIN);
+        test(NonZeroMoney::MAX);
+    }
+
+    #[test]
+    fn deserialize_operation_create_should_work() {
+        fn test(acc: AccountId) {
+            let initial = Operation::Create(acc);
+            let serialized: Vec<u8> = initial.serialize();
+
+            let actual: Result<Operation, String> = Operation::deserialize(&serialized);
+
+            assert!(actual.is_ok());
+            assert_eq!(initial, actual.unwrap().0);
+        }
+
+        test("Hello Rust".to_string());
+        test("".to_string());
+    }
+
+    #[test]
+    fn deserialize_operation_deposit_should_work() {
+        fn test(money: NonZeroMoney) {
+            let initial = Operation::Deposit(money);
+            let serialized: Vec<u8> = initial.serialize();
+            let actual: Result<Operation, String> = Operation::deserialize(&serialized);
+            assert!(actual.is_ok());
+            assert_eq!(initial, actual.unwrap().0);
+        }
+
+        test(NonZeroMoney::MIN);
+        test(NonZeroMoney::MAX);
+        test(NonZeroMoney::new(42).unwrap());
+    }
+
+    #[test]
+    fn deserialize_operation_withdraw_should_work() {
+        fn test(money: NonZeroMoney) {
+            let initial = Operation::Withdraw(money);
+            let serialized: Vec<u8> = initial.serialize();
+            let actual: Result<Operation, String> = Operation::deserialize(&serialized);
+            assert!(actual.is_ok());
+            assert_eq!(initial, actual.unwrap().0);
+        }
+
+        test(NonZeroMoney::MIN);
+        test(NonZeroMoney::MAX);
+        test(NonZeroMoney::new(42).unwrap());
     }
 }

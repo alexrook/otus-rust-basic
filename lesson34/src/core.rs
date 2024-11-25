@@ -14,7 +14,7 @@ pub struct Account {
     pub balance: Money,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     /**
      * Перед выполнением любых операций по счёту, его необходимо создать.
