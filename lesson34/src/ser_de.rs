@@ -65,27 +65,38 @@ impl Serializable for Operation {
 
                 ret
             }
-            Operation::Deposit(_acccount_id, money) => {
-                //TODO:impl serialize
+            Operation::Deposit(account_id, money) => {
+                //AccountId
+                let mut account_id_bytes: Vec<u8> = account_id.serialize();
+                //Money
                 let mut money_bytes: Vec<u8> = money.serialize();
-                let len_total: usize = money_bytes.len();
+                //Len
+                let len_total: usize = account_id_bytes.len() + money_bytes.len();
                 assert!(len_total < u8::MAX as usize);
+                //Push
                 let mut ret: Vec<u8> =
-                    Vec::with_capacity(size_of::<TypeIdMark>() + money_bytes.len());
+                    Vec::with_capacity(size_of::<TypeIdMark>() + size_of::<u8>() + len_total);
                 ret.push(TYPE_ID_OPERATION_DEPOSIT);
                 ret.push(len_total as u8);
+                ret.append(&mut account_id_bytes);
                 ret.append(&mut money_bytes);
                 ret
             }
-            Operation::Withdraw(_account_id, money) => {
-                //TODO: impl serialize
+            //TODO: extract common code to fn
+            Operation::Withdraw(account_id, money) => {
+                //AccountId
+                let mut account_id_bytes: Vec<u8> = account_id.serialize();
+                //Money
                 let mut money_bytes: Vec<u8> = money.serialize();
-                let len_total: usize = money_bytes.len();
+                //Len
+                let len_total: usize = account_id_bytes.len() + money_bytes.len();
                 assert!(len_total < u8::MAX as usize);
+                //Push
                 let mut ret: Vec<u8> =
-                    Vec::with_capacity(size_of::<TypeIdMark>() + money_bytes.len());
+                    Vec::with_capacity(size_of::<TypeIdMark>() + size_of::<u8>() + len_total);
                 ret.push(TYPE_ID_OPERATION_WITHDRAW);
                 ret.push(len_total as u8);
+                ret.append(&mut account_id_bytes);
                 ret.append(&mut money_bytes);
                 ret
             }
@@ -179,26 +190,27 @@ where
             },
             data,
             |type_id, next| match *type_id {
-                1 => AccountId::deserialize(next)
+                TYPE_ID_OPERATION_CREATE => AccountId::deserialize(next)
                     .map(|(account_id, _)| Operation::Create(account_id)),
-                2 => todo!(),
-                // 2 => NonZeroMoney::deserialize(next)
-                //     .map(|(non_zero_money, _)| Operation::Deposit(non_zero_money))
-                //     .map_err(|err: E| {
-                //         format!(
-                //             "An error[{:?}] occurred while Operation::Deposit deserialization",
-                //             err
-                //         )
-                //     }),
-                3 => todo!(),
-                // 3 => NonZeroMoney::deserialize(next)
-                //     .map(|(non_zero_money, _)| Operation::Withdraw(non_zero_money))
-                //     .map_err(|err: E| {
-                //         format!(
-                //             "An error[{:?}] occurred while Operation::Withdraw deserialization",
-                //             err
-                //         )
-                //     }),
+
+                TYPE_ID_OPERATION_DEPOSIT => {
+                    let (account_id, cursor) = AccountId::deserialize(next)?;
+                    let next = next
+                        .get(cursor.pos..)
+                        .ok_or(format!("unsufficient bytes for money reading"))?;
+                    let (non_zero_money, _) = NonZeroMoney::deserialize(&next)?;
+                    Ok(Operation::Deposit(account_id, non_zero_money))
+                }
+
+                TYPE_ID_OPERATION_WITHDRAW => {
+                    let (account_id, cursor) = AccountId::deserialize(next)?;
+                    let next = next
+                        .get(cursor.pos..)
+                        .ok_or(format!("unsufficient bytes for money reading"))?;
+                    let (non_zero_money, _) = NonZeroMoney::deserialize(&next)?;
+                    Ok(Operation::Withdraw(account_id, non_zero_money))
+                }
+
                 other => Err::<Operation, E>(format!("unsupported type_id[{}]", other).into()),
             },
         )
@@ -266,9 +278,12 @@ mod tests {
             serialized.len(),
             size_of::<TypeIdMark>() //type of operation
              + size_of::<u8>()      //size of whole type
+             + size_of::<TypeIdMark>() //account id type
+             + size_of::<u8>()       //size of account id 
+             + acc.as_bytes().len() //account bytes
              + size_of::<TypeIdMark>() //type of money
              + size_of::<u8>()      //size of money type
-             + money.get().to_be_bytes().len()
+             + size_of::<NonZeroMoney>()
         );
 
         let money = NonZeroMoney::new(42 * 42).unwrap();
@@ -277,13 +292,17 @@ mod tests {
         let serialized: Vec<u8> = initial.serialize();
 
         assert_eq!(
+            //the same as Deposit
             serialized.len(),
             size_of::<TypeIdMark>() //type of operation
-             + size_of::<u8>()      //size of whole type
-             + size_of::<TypeIdMark>() //type of money
-             + size_of::<u8>()      //size of money type
-             + money.get().to_be_bytes().len()
-        );
+                 + size_of::<u8>()      //size of whole type
+                 + size_of::<TypeIdMark>() //account id type
+                 + size_of::<u8>()       //size of account id 
+                 + acc.as_bytes().len() //account bytes
+                 + size_of::<TypeIdMark>() //type of money
+                 + size_of::<u8>()      //size of money type
+                 + size_of::<NonZeroMoney>()
+        )
     }
 
     #[test]
