@@ -65,7 +65,8 @@ impl Serializable for Operation {
 
                 ret
             }
-            Operation::Deposit(money) => {
+            Operation::Deposit(_acccount_id, money) => {
+                //TODO:impl serialize
                 let mut money_bytes: Vec<u8> = money.serialize();
                 let len_total: usize = money_bytes.len();
                 assert!(len_total < u8::MAX as usize);
@@ -76,7 +77,8 @@ impl Serializable for Operation {
                 ret.append(&mut money_bytes);
                 ret
             }
-            Operation::Withdraw(money) => {
+            Operation::Withdraw(_account_id, money) => {
+                //TODO: impl serialize
                 let mut money_bytes: Vec<u8> = money.serialize();
                 let len_total: usize = money_bytes.len();
                 assert!(len_total < u8::MAX as usize);
@@ -179,23 +181,25 @@ where
             |type_id, next| match *type_id {
                 1 => AccountId::deserialize(next)
                     .map(|(account_id, _)| Operation::Create(account_id)),
-                2 => NonZeroMoney::deserialize(next)
-                    .map(|(non_zero_money, _)| Operation::Deposit(non_zero_money))
-                    .map_err(|err: E| {
-                        format!(
-                            "An error[{:?}] occurred while Operation::Deposit deserialization",
-                            err
-                        )
-                    }),
-                3 => NonZeroMoney::deserialize(next)
-                    .map(|(non_zero_money, _)| Operation::Withdraw(non_zero_money))
-                    .map_err(|err: E| {
-                        format!(
-                            "An error[{:?}] occurred while Operation::Withdraw deserialization",
-                            err
-                        )
-                    }),
-                other => Err(format!("unsupported type_id[{}]", other).into()),
+                2 => todo!(),
+                // 2 => NonZeroMoney::deserialize(next)
+                //     .map(|(non_zero_money, _)| Operation::Deposit(non_zero_money))
+                //     .map_err(|err: E| {
+                //         format!(
+                //             "An error[{:?}] occurred while Operation::Deposit deserialization",
+                //             err
+                //         )
+                //     }),
+                3 => todo!(),
+                // 3 => NonZeroMoney::deserialize(next)
+                //     .map(|(non_zero_money, _)| Operation::Withdraw(non_zero_money))
+                //     .map_err(|err: E| {
+                //         format!(
+                //             "An error[{:?}] occurred while Operation::Withdraw deserialization",
+                //             err
+                //         )
+                //     }),
+                other => Err::<Operation, E>(format!("unsupported type_id[{}]", other).into()),
             },
         )
     }
@@ -254,7 +258,7 @@ mod tests {
         );
 
         let money = NonZeroMoney::new(42).unwrap();
-        let initial = Operation::Deposit(money);
+        let initial = Operation::Deposit(acc.clone(), money);
 
         let serialized: Vec<u8> = initial.serialize();
 
@@ -268,7 +272,7 @@ mod tests {
         );
 
         let money = NonZeroMoney::new(42 * 42).unwrap();
-        let initial = Operation::Withdraw(money);
+        let initial = Operation::Withdraw(acc.clone(), money);
 
         let serialized: Vec<u8> = initial.serialize();
 
@@ -330,13 +334,14 @@ mod tests {
 
     #[test]
     fn deserialize_operation_deposit_should_work() {
-        fn test(money: NonZeroMoney) {
-            let initial = Operation::Deposit(money);
+        let acc = "acc".to_string();
+        let test = |money: NonZeroMoney| {
+            let initial = Operation::Deposit(acc.clone(), money);
             let serialized: Vec<u8> = initial.serialize();
             let actual: Result<Operation, String> = Operation::deserialize(&serialized);
             assert!(actual.is_ok());
             assert_eq!(initial, actual.unwrap().0);
-        }
+        };
 
         test(NonZeroMoney::MIN);
         test(NonZeroMoney::MAX);
@@ -345,13 +350,14 @@ mod tests {
 
     #[test]
     fn deserialize_operation_withdraw_should_work() {
-        fn test(money: NonZeroMoney) {
-            let initial = Operation::Withdraw(money);
+        let acc = "acc".to_string();
+        let test = |money: NonZeroMoney| {
+            let initial = Operation::Withdraw(acc.clone(), money);
             let serialized: Vec<u8> = initial.serialize();
             let actual: Result<Operation, String> = Operation::deserialize(&serialized);
             assert!(actual.is_ok());
             assert_eq!(initial, actual.unwrap().0);
-        }
+        };
 
         test(NonZeroMoney::MIN);
         test(NonZeroMoney::MAX);
