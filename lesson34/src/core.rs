@@ -15,7 +15,7 @@ pub struct Account {
     pub balance: Money,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     /**
      * Перед выполнением любых операций по счёту, его необходимо создать.
@@ -33,7 +33,14 @@ pub enum Operation {
      * Попытка снять больше чем есть на счете - ошибка.
      */
     Withdraw(AccountId, NonZeroMoney), //снятие
-                                       //перевод реализован через сумму операций Withdraw + Deposit
+    //перевод реализован через сумму операций Withdraw + Deposit
+    Move {
+        from: AccountId,
+        to: AccountId,
+        amount: NonZeroMoney,
+    },
+
+    GetBalance(AccountId),
 }
 
 impl Operation {
@@ -41,6 +48,10 @@ impl Operation {
         match self {
             Operation::Create(account_id) => account_id,
             Operation::Deposit(account_id, _) | Self::Withdraw(account_id, _) => account_id,
+            other => panic!(
+                "your code should not get use other operations[{:?}] for states",
+                other
+            ),
         }
     }
 }
@@ -225,6 +236,13 @@ impl<'a> InMemoryState {
 
             Operation::Withdraw(account_id, _) | Operation::Deposit(account_id, _) => {
                 return Err(format!("Bank doesnt contain account_id[{}]", account_id))
+            }
+
+            other => {
+                panic!(
+                    "your code should not put other operations[{:?}] into state",
+                    other
+                );
             }
         };
 
