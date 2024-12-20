@@ -1,3 +1,4 @@
+pub const MAGIC_DATA_SIZE: usize = 2;
 pub const MAX_ACCOUNT_ID_LEN: usize = 16;
 
 pub type TypeIdMark = u8;
