@@ -101,7 +101,7 @@ pub trait Serializable {
 impl Serializable for AccountId {
     fn serialize(&self) -> Vec<u8> {
         let str_bytes: &[u8] = self.as_bytes();
-        assert!(str_bytes.len() < MAX_ACCOUNT_ID_LEN); //I think 128 bits is good enough.
+        // assert!(str_bytes.len() < MAX_ACCOUNT_ID_LEN); //I think 128 bits is good enough.
         Self::for_simple(TYPE_ID_ACCOUNT_ID, str_bytes)
     }
 }
