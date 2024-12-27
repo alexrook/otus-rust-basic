@@ -19,3 +19,4 @@ pub const TYPE_ID_OPERATION_GETBALANCE: TypeIdMark = 5;
 //ser-de Protocol
 pub const TYPE_ID_PROTOCOL_REQUEST: TypeIdMark = 15;
 pub const TYPE_ID_PROTOCOL_RESPONSE: TypeIdMark = 16;
+pub const TYPE_ID_PROTOCOL_QUIT: TypeIdMark = 17;

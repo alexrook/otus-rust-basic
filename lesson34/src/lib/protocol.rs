@@ -13,6 +13,7 @@ use crate::{
 pub enum Protocol {
     Request(Operation),
     Response(Result<Vec<Account>, String>),
+    Quit,
 }
 
 pub struct IO;

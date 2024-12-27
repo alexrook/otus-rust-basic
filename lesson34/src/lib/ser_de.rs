@@ -187,6 +187,7 @@ impl Serializable for Protocol {
         match self {
             Protocol::Request(op) => Self::for_one(TYPE_ID_PROTOCOL_REQUEST, op),
             Protocol::Response(result) => Self::for_one(TYPE_ID_PROTOCOL_RESPONSE, result),
+            Protocol::Quit => Self::for_simple(TYPE_ID_PROTOCOL_QUIT, &[]),
         }
     }
 }
@@ -437,7 +438,14 @@ where
 {
     fn deserialize(data: &[u8]) -> DesResult<Protocol, E> {
         Self::unmarshall(
-            |type_id| [TYPE_ID_PROTOCOL_REQUEST, TYPE_ID_PROTOCOL_RESPONSE].contains(type_id),
+            |type_id| {
+                [
+                    TYPE_ID_PROTOCOL_REQUEST,
+                    TYPE_ID_PROTOCOL_RESPONSE,
+                    TYPE_ID_PROTOCOL_QUIT,
+                ]
+                .contains(type_id)
+            },
             data,
             |type_id, next| match *type_id {
                 TYPE_ID_PROTOCOL_REQUEST => {
@@ -448,6 +456,8 @@ where
                     let (result, _) = Result::<Vec<Account>, String>::deserialize(next)?;
                     Ok(Protocol::Response(result))
                 }
+
+                TYPE_ID_PROTOCOL_QUIT => Ok(Protocol::Quit),
                 other => Err::<Protocol, E>(format!("unsupported type_id[{}]", other).into()),
             },
         )
@@ -971,5 +981,16 @@ pub mod deserialize_tests {
         ]);
 
         test(Vec::new());
+    }
+
+    #[test]
+    fn deserialize_protocol_quit_should_work() {
+        let initial: Protocol = Protocol::Quit;
+        let serialized = initial.serialize();
+        let actual: DesResult<Protocol, String> = Protocol::deserialize(&serialized);
+
+        assert!(actual.is_ok());
+        let (actual, _) = actual.unwrap();
+        assert_eq!(initial, actual);
     }
 }
