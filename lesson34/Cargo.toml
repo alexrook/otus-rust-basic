@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "core"           # The name of the target.
+name = "common"         # The name of the target.
 path = "src/lib/lib.rs"
 
 [[bin]]
