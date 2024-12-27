@@ -1,8 +1,19 @@
-use core::core::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
-use core::{core::Account, protocol::Protocol, protocol::IO};
+use common::core::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
+use common::{core::Account, protocol::Protocol, protocol::IO};
 use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result as IOResult, Write};
 use std::net::{TcpListener, TcpStream};
+
+fn close<'a, E>(stream: &'a mut TcpStream) -> IOResult<()>
+where
+    E: From<String> + Into<String> + Debug,
+{
+    IO::write::<E>(stream, &Protocol::Quit)
+        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+    let _ = stream.flush()?;
+    let _ = stream.shutdown(std::net::Shutdown::Both)?;
+    Ok(())
+}
 
 fn handle_connection<'a, 'b, T, S, E>(
     stream: &'b mut TcpStream,
@@ -13,27 +24,32 @@ where
     S: State,
     E: From<String> + Into<String> + Debug,
 {
-    fn close<'a, 'b>(stream: &'b mut TcpStream) -> IOResult<()> {
-        let _ = stream.flush()?;
-        let _ = stream.shutdown(std::net::Shutdown::Both)?;
-        Ok(())
-    }
-
     let message = IO::read::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
     match message {
         Protocol::Quit => {
             println!("Quit command received");
-            return close(stream);
+            return close::<E>(stream);
         }
         Protocol::Response(_) => {
             eprintln!("Unexpected client behavior, it should only send Request and Quit protocol commands");
-            return close(stream);
+            return close::<E>(stream);
         }
         Protocol::Request(op) => {
-            let bank_ret = bank_deal(bank, op)?;
-            let cloned = Vec::from_iter(bank_ret.into_iter().map(|account| account.clone()));
-            let response = Protocol::Response(Ok(cloned));
+            println!("Operation[{:?}] request received", op);
+
+            let response = match bank_deal(bank, op) {
+                Ok(bank_accs) => {
+                    let cloned =
+                        Vec::from_iter(bank_accs.into_iter().map(|account| account.clone()));
+                    Protocol::Response(Ok(cloned))
+                }
+                Err(bank_err) => {
+                    eprintln!("An error[{:?}] occurred while bank dealing", bank_err);
+                    Protocol::Response(Err(bank_err))
+                }
+            };
+
             IO::write::<E>(stream, &response)
                 .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
             handle_connection::<T, S, E>(stream, bank)
@@ -41,14 +57,13 @@ where
     }
 }
 
-fn bank_deal<'a, T, S>(bank: &'a mut Bank<T, S>, op: Operation) -> IOResult<Vec<&'a Account>>
+fn bank_deal<'a, T, S>(bank: &'a mut Bank<T, S>, op: Operation) -> Result<Vec<&'a Account>, String>
 where
     T: OpsStorage,
     S: State,
 {
-    fn map_ret<'a>(ret: Result<&'a Account, String>) -> IOResult<Vec<&'a Account>> {
+    fn map_ret<'a>(ret: Result<&'a Account, String>) -> Result<Vec<&'a Account>, String> {
         ret.map(|account| vec![account])
-            .map_err(|bank_err| std::io::Error::new(ErrorKind::Other, bank_err))
     }
 
     match op {
@@ -58,15 +73,14 @@ where
         Operation::GetBalance(acc) => map_ret(bank.get_balance(&acc)),
         Operation::Move { from, to, amount } => bank
             .move_money(from, to, amount)
-            .map(|iter| Vec::from_iter(iter))
-            .map_err(|bank_err| std::io::Error::new(ErrorKind::Other, bank_err)),
+            .map(|iter| Vec::from_iter(iter)),
     }
 }
 
 fn main() -> IOResult<()> {
-    let server = TcpListener::bind("localhost:8080")?;
+    let server = TcpListener::bind("127.0.0.1:8080")?;
 
-    println!("Server is listening on localhost:8080");
+    println!("Server is listening on 127.0.0.1:8080");
 
     let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
         Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
@@ -74,6 +88,9 @@ fn main() -> IOResult<()> {
     for conn_result in server.incoming() {
         match conn_result {
             Ok(mut stream) => {
+                let peer_addr = stream.peer_addr()?;
+                println!("Incoming connection from[{:?}]", peer_addr);
+
                 match handle_connection::<InMemoryOpsStorage, InMemoryState, String>(
                     &mut stream,
                     &mut bank,
