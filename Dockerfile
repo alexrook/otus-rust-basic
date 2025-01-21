@@ -1,4 +1,4 @@
-FROM rust:1.81-bookworm
+FROM rust:1.84-bookworm
 
 ARG USERNAME
 ARG USER_UID
