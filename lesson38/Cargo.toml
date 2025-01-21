@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "matrix"         # The name of the target.
+name = "matrices"         # The name of the target.
 path = "src/lib/lib.rs"
 
 [dependencies]
