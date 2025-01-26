@@ -1,26 +1,22 @@
 use std::{
     iter::Product,
-    ops::{Add, Index, Mul}
+    marker::PhantomData,
+    ops::{Add, Deref, Index, Mul},
 };
 
 use crate::matrix::Matrix;
 
-pub struct Matrices<'a, T, const M: usize, const N: usize>(Vec<&'a Matrix<T, M, N>>);
+/// Время 'b и PhantomData остались от попытки реализовать Index, такой,
+/// что бы время жизни ссылки по индексу, превышало время жизни структуры.
+/// При реализации Deref (thanks Discord people), 'b не нужно
+pub struct Matrices<'a, 'b, T, const M: usize, const N: usize>(
+    Vec<&'a Matrix<T, M, N>>,
+    PhantomData<&'b T>,
+);
 
-//Эти две реализации Index компилируюся, но не работают как ожидалось
+//Эта реализация Index компилируюся, но не работает как ожидалось
 //see test_index_should_work
-impl<'a, T, const M: usize, const N: usize> Index<usize> for Matrices<'a, T, M, N> {
-    type Output = Matrix<T, M, N>;
-
-    fn index(&self, index: usize) -> &'a Self::Output {
-        self.0.index(index)
-    }
-}
-
-// impl<'a, 'b, T, const M: usize, const N: usize> Index<usize> for &'b Matrices<'a, T, M, N>
-// where
-//     'a: 'b,
-// {
+// impl<'a, 'b, T, const M: usize, const N: usize> Index<usize> for Matrices<'a, 'b, T, M, N> {
 //     type Output = Matrix<T, M, N>;
 
 //     fn index(&self, index: usize) -> &'a Self::Output {
@@ -28,17 +24,24 @@ impl<'a, T, const M: usize, const N: usize> Index<usize> for Matrices<'a, T, M, 
 //     }
 // }
 
-impl<'a, T, const M: usize, const N: usize> Matrices<'a, T, M, N> {
-    pub fn new(vec: Vec<&'a Matrix<T, M, N>>) -> Matrices<'a, T, M, N> {
-        Matrices(vec)
+impl<'a, 'b, T, const M: usize, const N: usize> Deref for Matrices<'a, 'b, T, M, N> {
+    type Target = Vec<&'a Matrix<T, M, N>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'a, 'b, T, const M: usize, const N: usize> Matrices<'a, 'b, T, M, N>
+where
+    'a: 'b,
+{
+    pub fn new(vec: Vec<&'a Matrix<T, M, N>>) -> Matrices<'a, 'b, T, M, N> {
+        Matrices(vec, PhantomData)
     }
 
     //не удалось реализовать через трайт Index -> error[E0597]: actual does not live long enough
-    //это метод рабочий
-    pub fn my_index<'b>(&'b self, index: usize) -> &'a Matrix<T, M, N>
-    where
-        'a: 'b,
-    {
+    pub fn my_index(&'b self, index: usize) -> &'a Matrix<T, M, N> {
+        //это метод рабочий
         self.0[index]
     }
 
@@ -47,10 +50,10 @@ impl<'a, T, const M: usize, const N: usize> Matrices<'a, T, M, N> {
     }
 }
 
-impl<'a, T, const M: usize, const N: usize> Matrices<'a, T, M, N>
+impl<'a, 'b, T, const M: usize, const N: usize> Matrices<'a, 'b, T, M, N>
 where
     T: Default + 'static,
-    for<'b> &'b T: Add<Output = T>,
+    for<'c> &'c T: Add<Output = T>,
 {
     pub fn sum_el(self) -> T {
         let mut ret = T::default();
@@ -63,10 +66,10 @@ where
     }
 }
 
-impl<'a, T, const M: usize, const N: usize> Matrices<'a, T, M, N>
+impl<'a, 'b, T, const M: usize, const N: usize> Matrices<'a, 'b, T, M, N>
 where
     T: Default + 'static,
-    for<'b> &'b T: Mul<Output = T>,
+    for<'c> &'c T: Mul<Output = T>,
 {
     pub fn mul_el(self) -> T {
         let mut prev: &T = &T::default();
@@ -88,7 +91,7 @@ where
     }
 }
 
-impl<'a, T, const M: usize, const N: usize> Matrices<'a, T, M, N>
+impl<'a, 'b, T, const M: usize, const N: usize> Matrices<'a, 'b, T, M, N>
 where
     T: 'static + Product<&'a T>,
 {
@@ -124,18 +127,36 @@ pub mod tests {
     #[ignore]
     #[test]
     fn test_index_should_work() {
+        //fail
         let array = [0, 1, 2, 3, 4, 5];
 
-        let m1: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&array);
-        let m2: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&array);
-        let should_be_m1: &Matrix<i32, 2, 3>;
+        let m1 = Matrix::<i32, 2, 3>::from_array(&array);
+        let m2 = Matrix::<i32, 2, 3>::from_array(&array);
+        //  let should_be_m1;
 
         {
             let actual = Matrices::new(vec![&m1, &m2]);
-          //  should_be_m1 = actual.index(0); //error here
-                                            // should_be_m2 = &actual[1];
+            //  should_be_m1 = actual.index(0); //error here
         }
-       // assert_eq!(should_be_m1, &m1);
+        //assert_eq!(should_be_m1, &m1);
+    }
+
+    #[test]
+    fn test_deref_should_work() {
+        let array = [0, 1, 2, 3, 4, 5];
+
+        let m1 = Matrix::<i32, 2, 3>::from_array(&array);
+        let m2 = Matrix::<i32, 2, 3>::from_array(&array);
+        let should_be_m1;
+        let should_be_m2;
+
+        {
+            let actual = Matrices::new(vec![&m1, &m2]);
+            should_be_m1 = actual[0];
+            should_be_m2 = actual[1];
+        }
+        assert_eq!(should_be_m1, &m1);
+        assert_eq!(should_be_m2, &m2);
     }
 
     #[test]
