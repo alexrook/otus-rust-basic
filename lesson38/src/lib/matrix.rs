@@ -2,12 +2,11 @@ use core::array;
 use std::{
     fmt::Display,
     ops::{Add, Mul},
-    usize,
 };
 
 fn for_each_m_n<F, const M: usize, const N: usize>(mut f: F)
 where
-    F: FnMut(usize, usize) -> (),
+    F: FnMut(usize, usize),
 {
     for row/*строки*/ in 0..M {
         for col/*столбцы*/ in 0..N {
@@ -22,7 +21,7 @@ pub struct Matrix<T, const M: usize, const N: usize>([[T; N]; M]);
 impl<T, const M: usize, const N: usize> Matrix<T, M, N> {
     pub fn for_each<F>(&self, mut f: F)
     where
-        F: FnMut(usize, usize, &T) -> (),
+        F: FnMut(usize, usize, &T),
     {
         for_each_m_n::<_, M, N>(|i, j| f(i, j, &self.0[i][j]));
     }
@@ -130,7 +129,7 @@ where
     fn add(self, rhs: Self) -> Self::Output {
         //  let mut ret = Self::Output::default();
         self.into_iter()
-            .zip(rhs.into_iter())
+            .zip(rhs)
             .map(|((l_row, l_col, left), (r_row, r_col, right))| {
                 assert!(l_row == r_row);
                 assert!(l_col == r_col);
