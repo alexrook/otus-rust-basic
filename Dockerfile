@@ -21,7 +21,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-RUN chown -R ${USERNAME} '/usr/local/cargo/'
+RUN chown -R vscode:rustlang '/usr/local/cargo/'
 
 # ********************************************************
 # * Anything else you want to do like clean up goes here *
