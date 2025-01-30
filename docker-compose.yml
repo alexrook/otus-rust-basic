@@ -1,0 +1,17 @@
+networks:
+  app-network:
+    name: OtusRustNet
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        - USER_GID=$USER_GID
+        - USER_UID=$USER_UID
+        - USERNAME=$USER
+    command: sleep infinity
+    networks:
+      - app-network
+    volumes:
+      - .:/workspace:cached  # Mount the root folder that contains .git
