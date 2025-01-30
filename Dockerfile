@@ -1,25 +1,25 @@
-FROM rust:1.84-bookworm
+FROM mcr.microsoft.com/devcontainers/rust:bookworm
 
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
 
-# Create the user
-RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
-    # [Optional] Add git and sudo support. Omit if you don't need to install software after connecting.
-    && apt-get update \
-    && apt-get install -y sudo \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME
+# Add packages
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends git
+RUN apt-get install -y --no-install-recommends telnet
 
-# more packages
-RUN apt-get install -y git
-RUN apt-get install -y telnet
-
+# Setup rust machinery
 RUN rustup component add rustfmt
 RUN rustup component add clippy
 RUN cargo install cargo-expand
+
+# Create the user
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -G vscode,rustlang -m $USERNAME \
+    && apt-get install -y sudo \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
 
 RUN chown -R ${USERNAME} '/usr/local/cargo/'
 
