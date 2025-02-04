@@ -14,9 +14,17 @@ where
         }
     }
 }
+
+fn is_first_element(row: usize, col: usize) -> bool {
+    row == 0 && col == 0
+}
+
+fn non_first_element(row: usize, col: usize) -> bool {
+    !is_first_element(row, col)
+}
 ///M строки,N столбцы
 #[derive(Debug, PartialEq, Eq)]
-pub struct Matrix<T, const M: usize, const N: usize>([[T; N]; M]);
+pub struct Matrix<T, const M: usize, const N: usize>(pub [[T; N]; M]);
 
 //к сожалению derive на работает для Default для [[T; N]; M]
 impl<T, const M: usize, const N: usize> Default for Matrix<T, M, N>
@@ -32,16 +40,68 @@ where
 impl<T, const M: usize, const N: usize> Matrix<T, M, N> {
     pub fn for_each<F>(&self, mut f: F)
     where
-        F: FnMut(usize, usize, &T),
+        F: FnMut(MatrixIterEntry<&T>),
     {
-        for_each_m_n::<_, M, N>(|i, j| f(i, j, &self.0[i][j]));
+        for_each_m_n::<_, M, N>(|row, col| {
+            f(MatrixIterEntry {
+                row,
+                col,
+                elem: &self.0[row][col],
+            })
+        });
     }
-}
 
-impl<T, const M: usize, const N: usize> Matrix<T, M, N>
-where
-    T: Default,
-{
+    pub fn fold<F>(&self, mut f: F) -> T
+    where
+        F: FnMut(Option<&T>, MatrixIterEntry<&T>) -> T,
+    {
+        const {
+            if M * N == 0 {
+                panic!("M * N == 0");
+            }
+        }
+
+        let mut acc: T = f(
+            None,
+            MatrixIterEntry {
+                row: 0,
+                col: 0,
+                elem: &self.0[0][0],
+            },
+        );
+
+        self.for_each(|entry| {
+            if non_first_element(entry.row, entry.col) {
+                //skip "used" elem
+                acc = f(Some(&acc), entry);
+            }
+        });
+
+        acc
+    }
+
+    pub fn fold_mul(&self) -> T
+    where
+        T: Clone, //для операции сложения на ссылке нужен или identity elem или Clone
+        for<'c> &'c T: Mul<Output = T>,
+    {
+        self.fold(|may_be_acc, entry| match may_be_acc {
+            Some(acc) => acc * entry.elem,
+            None => entry.elem.clone(),
+        })
+    }
+
+    pub fn fold_sum(&self) -> T
+    where
+        T: Clone, //для операции умножения на ссылке нужен или identity elem или Clone
+        for<'a> &'a T: Add<Output = T>,
+    {
+        self.fold(|may_be_acc, entry| match may_be_acc {
+            Some(acc) => acc + entry.elem,
+            None => entry.elem.clone(),
+        })
+    }
+
     pub fn from_array<const L: usize>(array: &[T; L]) -> Matrix<T, M, N>
     where
         T: Clone,
@@ -51,9 +111,8 @@ where
                 panic!("L != M * N");
             }
         }
-
-        assert!(M * N == L);
-        let mut ret = Self::default();
+        let dummy = array[0].clone();
+        let mut ret = Matrix(array::from_fn(|_| array::from_fn(|_| dummy.clone())));
         //в данной матрице каждая строка M это массив 0..N
         for_each_m_n::<_, M, N>(|row, col| ret.0[row][col] = array[col + row * N].clone());
 
@@ -62,7 +121,7 @@ where
 
     pub fn mul_scalar(self, v: T) -> Self
     where
-        T: Clone + 'static,
+        T: Default + Clone + 'static,
         T: Mul<Output = T>,
     {
         let mut ret = Matrix::<T, M, N>::default();
@@ -72,6 +131,7 @@ where
         ret
     }
 }
+
 //Структура элемент итератора для матрицы
 pub struct MatrixIterEntry<T> {
     pub row: usize,
@@ -131,11 +191,11 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.for_each(|_, col, e| {
-            if col == (N - 1) {
-                writeln!(f, "{}", e).unwrap();
+        self.for_each(|entry| {
+            if entry.col == (N - 1) {
+                writeln!(f, "{}", entry.elem).unwrap();
             } else {
-                write!(f, "{}, ", e).unwrap();
+                write!(f, "{}, ", entry.elem).unwrap();
             }
         });
 
@@ -218,6 +278,27 @@ pub mod tests {
         // строка 1, колонка 2
         assert!(m1.0[1][2] == 6);
         println!("{:?}", m1);
+    }
+
+    #[test]
+    fn test_fold() {
+        let array = [1, 2, 3, 4, 5, 6];
+        let m1 = Matrix::<i32, 2, 3>::from_array(&array);
+        let actual = m1.fold(|prev, entry| match prev {
+            Some(acc) => acc + entry.elem,
+            None => entry.elem + 0, /*identity elem for add */
+        });
+
+        assert_eq!(actual, array.iter().sum());
+
+        let array = [1, 2, 3, 4, 5, 6];
+        let m1 = Matrix::<i32, 2, 3>::from_array(&array);
+        let actual = m1.fold(|prev, entry| match prev {
+            Some(acc) => acc * entry.elem,
+            None => entry.elem * 1, /*identity elem for mul */
+        });
+
+        assert_eq!(actual, array.iter().product());
     }
 
     #[test]
