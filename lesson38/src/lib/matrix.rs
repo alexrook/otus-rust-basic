@@ -157,35 +157,27 @@ where
 }
 
 // Умножение доступно для матриц, где количество столбцов первой совпадает с количеством строк второй.
-//M строки,N столбцы
-// невозможно реалзовать поверх Mul поскольку для умножения нужен элемент того же типа
-// в случае матрицы умножаются два разных типа Matrix<T, M, N> * Matrix<T, N, P>
-impl<T, const M: usize, const N: usize> Matrix<T, M, N>
+// M,N - строки и столбцы self
+// N,P - cтроки и столбцы rhs
+impl<T, const M: usize, const N: usize, const P: usize> Mul<Matrix<T, N, P>> for Matrix<T, M, N>
 where
     T: Default + Add<Output = T>,
     for<'a> &'a T: Mul<Output = T>,
 {
-    fn sum_and_mul_row_col<const P: usize>(
-        &self,
-        other: &Matrix<T, N, P>,
-        row: usize,
-        col: usize,
-    ) -> T {
-        let mut ret = T::default();
-        for i in 0..N {
-            let mul = &self.0[row][i] * &other.0[i][col];
-            ret = ret + mul;
-        }
-        ret
-    }
-    //P столбцы другой матрицы
-    //при этом N это количество столбцов в self и строк в other
-    //результирующая матрица это M x P
-    pub fn mul<const P: usize>(self, other: Matrix<T, N, P>) -> Matrix<T, M, P> {
+    type Output = Matrix<T, M, P>;
+
+    fn mul(self, rhs: Matrix<T, N, P>) -> Self::Output {
         let mut ret = Matrix::<T, M, P>::default();
-        for i in 0..M {
-            for j in 0..P {
-                ret.0[i][j] = self.sum_and_mul_row_col(&other, i, j)
+        for row in 0..M {
+            for col in 0..P {
+                //умножение self.строки и rhs.столбца
+                let mut mul_sum_row_col = T::default();
+                for i in 0..N {
+                    let mul = &self.0[row][i] * &rhs.0[i][col];
+                    mul_sum_row_col = mul_sum_row_col + mul;
+                }
+                //и присвоение результата колонка*столбец элементу новой матрицы
+                ret.0[row][col] = mul_sum_row_col
             }
         }
 
