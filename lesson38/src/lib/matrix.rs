@@ -18,6 +18,17 @@ where
 #[derive(Debug, PartialEq, Eq)]
 pub struct Matrix<T, const M: usize, const N: usize>([[T; N]; M]);
 
+//к сожалению derive на работает для Default для [[T; N]; M]
+impl<T, const M: usize, const N: usize> Default for Matrix<T, M, N>
+where
+    T: Default,
+{
+    //default and zero matrix
+    fn default() -> Self {
+        Matrix(array::from_fn(|_| array::from_fn(|_| T::default())))
+    }
+}
+
 impl<T, const M: usize, const N: usize> Matrix<T, M, N> {
     pub fn for_each<F>(&self, mut f: F)
     where
@@ -49,9 +60,15 @@ where
         ret
     }
 }
+//Структура элемент итератора для матрицы
+pub struct MatrixIterEntry<T> {
+    pub row: usize,
+    pub col: usize,
+    pub elem: T,
+}
 
 impl<T: 'static, const M: usize, const N: usize> IntoIterator for Matrix<T, M, N> {
-    type Item = (usize, usize, T); //row, col, elem
+    type Item = MatrixIterEntry<T>;
 
     type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
 
@@ -60,7 +77,7 @@ impl<T: 'static, const M: usize, const N: usize> IntoIterator for Matrix<T, M, N
             inner
                 .into_iter()
                 .enumerate()
-                .map(move |(col, el)| (row, col, el))
+                .map(move |(col, elem)| MatrixIterEntry { row, col, elem })
         });
 
         Box::new(ret)
@@ -68,24 +85,30 @@ impl<T: 'static, const M: usize, const N: usize> IntoIterator for Matrix<T, M, N
 }
 
 impl<'a, T: 'static, const M: usize, const N: usize> IntoIterator for &'a Matrix<T, M, N> {
-    type Item = &'a T;
+    type Item = MatrixIterEntry<&'a T>;
 
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let ret = self.0.iter().flat_map(|row| row.iter());
+        let ret = self.0.iter().enumerate().flat_map(|(row, inner)| {
+            inner
+                .into_iter()
+                .enumerate()
+                .map(move |(col, elem)| MatrixIterEntry { row, col, elem })
+        });
+
         Box::new(ret)
     }
 }
 
-impl<T, const M: usize, const N: usize> FromIterator<(usize, usize, T)> for Matrix<T, M, N>
+impl<T, const M: usize, const N: usize> FromIterator<MatrixIterEntry<T>> for Matrix<T, M, N>
 where
     T: Default,
 {
-    fn from_iter<I: IntoIterator<Item = (usize, usize, T)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = MatrixIterEntry<T>>>(iter: I) -> Self {
         let mut ret = Matrix::<T, M, N>::default();
-        for (row, col, elem) in iter {
-            ret.0[row][col] = elem
+        for entry in iter {
+            ret.0[entry.row][entry.col] = entry.elem
         }
         ret
     }
@@ -108,20 +131,10 @@ where
     }
 }
 
-impl<T, const M: usize, const N: usize> Default for Matrix<T, M, N>
-where
-    T: Default,
-{
-    //default and zero matrix
-    fn default() -> Self {
-        Matrix(array::from_fn(|_| array::from_fn(|_| T::default())))
-    }
-}
-
 // Сложение доступно только для матриц одинаковых размеров.
 impl<T: 'static, const M: usize, const N: usize> Add for Matrix<T, M, N>
 where
-    T: Default,
+    T: Default, //see FromIterator
     T: Add<Output = T>,
 {
     type Output = Self;
@@ -130,10 +143,14 @@ where
         //  let mut ret = Self::Output::default();
         self.into_iter()
             .zip(rhs)
-            .map(|((l_row, l_col, left), (r_row, r_col, right))| {
-                assert!(l_row == r_row);
-                assert!(l_col == r_col);
-                (l_row, l_col, Add::add(left, right))
+            .map(|(left, right)| {
+                assert!(left.row == right.row);
+                assert!(left.col == right.col);
+                MatrixIterEntry {
+                    row: left.row,
+                    col: left.col,
+                    elem: Add::add(left.elem, right.elem),
+                }
             })
             .collect()
     }
@@ -141,6 +158,8 @@ where
 
 // Умножение доступно для матриц, где количество столбцов первой совпадает с количеством строк второй.
 //M строки,N столбцы
+// невозможно реалзовать поверх Mul поскольку для умножения нужен элемент того же типа
+// в случае матрицы умножаются два разных типа Matrix<T, M, N> * Matrix<T, N, P>
 impl<T, const M: usize, const N: usize> Matrix<T, M, N>
 where
     T: Default + Add<Output = T>,
@@ -179,9 +198,11 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn t() {
-        let r = &2 + &3;
-        println!("{}", r)
+    fn test_default() {
+        let matrix = Matrix::<i32, 2, 3>::default();
+        for entry in matrix {
+            assert_eq!(entry.elem, i32::default())
+        }
     }
 
     #[test]
@@ -198,13 +219,13 @@ pub mod tests {
     #[test]
     fn test_into_iter() {
         let initial: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&[1, 2, 3, 4, 5, 6]);
-        for (row, col, el) in initial {
-            println!("row[{}],col[{}],el[{}]", row, col, el)
+        for MatrixIterEntry { row, col, elem } in initial {
+            println!("row[{}],col[{}],el[{}]", row, col, elem)
         }
 
         let initial = Matrix::<&str, 2, 3>::from_array(&["a", "b", "c", "d", "i", "f"]);
-        for (row, col, el) in initial {
-            println!("row[{}],col[{}],el[{}]", row, col, el)
+        for MatrixIterEntry { row, col, elem } in initial {
+            println!("row[{}],col[{}],el[{}]", row, col, elem)
         }
 
         let initial = Matrix::<String, 2, 3>::from_array(&[
@@ -229,7 +250,7 @@ pub mod tests {
 
         let actual: Matrix<i32, 2, 3> = left + right;
 
-        for (row, col, elem) in actual {
+        for MatrixIterEntry { row, col, elem } in actual {
             print!("elem[{}] ", elem);
             assert_eq!((col + row * 3/*N*/) * 2, elem as usize);
         }

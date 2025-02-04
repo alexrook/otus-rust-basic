@@ -62,8 +62,8 @@ where
     pub fn sum_el(self) -> T {
         let mut ret = T::default();
         for matrix in self.0 {
-            for el in matrix.into_iter() {
-                ret = &ret + el;
+            for entry in matrix.into_iter() {
+                ret = &ret + entry.elem;
             }
         }
         ret
@@ -80,12 +80,12 @@ where
         let mut buf = T::default();
         let mut first_time = true;
         for matrix in self.0 {
-            for el in matrix.into_iter() {
+            for entry in matrix.into_iter() {
                 if first_time {
-                    prev = el;
+                    prev = entry.elem;
                     first_time = false;
                 } else {
-                    buf = prev * el;
+                    buf = prev * entry.elem;
                     prev = &buf;
                 }
             }
@@ -100,7 +100,10 @@ where
     T: 'static + Product<&'a T>,
 {
     pub fn product_el(self) -> T {
-        let r = self.0.into_iter().flat_map(|matrix| matrix.into_iter());
+        let r = self
+            .0
+            .into_iter()
+             .flat_map(|matrix| matrix.into_iter().map(|entry| entry.elem));
         r.product()
     }
 }
