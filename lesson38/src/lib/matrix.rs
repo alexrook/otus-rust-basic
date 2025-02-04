@@ -59,6 +59,18 @@ where
 
         ret
     }
+
+    pub fn mul_scalar(self, v: T) -> Self
+    where
+        T: Clone + 'static,
+        T: Mul<Output = T>,
+    {
+        let mut ret = Matrix::<T, M, N>::default();
+        for entry in self {
+            ret.0[entry.row][entry.col] = entry.elem * v.clone()
+        }
+        ret
+    }
 }
 //Структура элемент итератора для матрицы
 pub struct MatrixIterEntry<T> {
@@ -261,5 +273,35 @@ pub mod tests {
         let actual: Matrix<i32, 2, 2> = left.mul(right);
         println!("{}", actual);
         assert_eq!(actual, Matrix::<i32, 2, 2>::from_array(&[8, 15, 7, 13]));
+    }
+
+    #[test]
+    fn test_mul_scalar_should_work() {
+        let left: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&[0, 1, 2, 3, 4, 5]);
+        let actual = left.mul_scalar(42);
+        println!("{}", actual);
+        assert_eq!(
+            actual,
+            Matrix::<i32, 2, 3>::from_array(&[0, 42, 84, 126, 168, 210])
+        );
+
+        let left: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&[5, 4, 3, 2, 1, 0]);
+        let actual = left.mul_scalar(-2);
+        println!("{}", actual);
+        assert_eq!(
+            actual,
+            Matrix::<i32, 2, 3>::from_array(&[-10, -8, -6, -4, -2, 0])
+        );
+
+        let left: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&[5, 4, 3, 2, 1, 0]);
+        let actual = left.mul_scalar(0);
+        println!("{}", actual);
+        assert_eq!(actual, Matrix::<i32, 2, 3>::default());
+
+        let array = [5, 4, 3, 2, 1, 0];
+        let left: Matrix<i32, 2, 3> = Matrix::<i32, 2, 3>::from_array(&array);
+        let actual = left.mul_scalar(1);
+        println!("{}", actual);
+        assert_eq!(actual, Matrix::<i32, 2, 3>::from_array(&array));
     }
 }
