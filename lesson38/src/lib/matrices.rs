@@ -49,22 +49,20 @@ where
 
 impl<'a, 'b, T, const M: usize, const N: usize> Matrices<'a, 'b, T, M, N>
 where
-    T: Clone + Default + 'static,
+    T: Clone + 'static,
     for<'c> &'c T: Mul<Output = T>,
 {
     pub fn mul_el(self) -> T {
-        let mut prev: &T = &T::default();
-        let mut buf = T::default();
-        let mut first_time = true;
+        let mut buf = self.0[0][(0, 0)].clone(); //самый первый элемент самой первой матрицы
+        let mut non_first_time = false;
+
         for matrix in self.0 {
             for row in 0..M {
                 for col in 0..N {
-                    if first_time {
-                        prev = matrix.0[row][col];
-                        first_time = false;
+                    if non_first_time {
+                        buf = &buf * matrix[(row, col)]
                     } else {
-                        buf = prev * matrix.0[row][col];
-                        prev = &buf;
+                        non_first_time = true; //самый первый элемент пропускаем
                     }
                 }
             }
@@ -130,6 +128,7 @@ pub mod tests {
     fn test_mul_el_should_work() {
         let array = [&1, &2, &3, &4, &5, &6];
         let should_be_mul: i32 = array.iter().fold(1, |acc, el| acc * *el * *el);
+        eprintln!("{}", should_be_mul);
         let left: Matrix<&i32, 2, 3> = Matrix::from_array(&array);
         let right: Matrix<&i32, 2, 3> = Matrix::from_array(&array);
         let actual = Matrices::new(vec![&left, &right]);

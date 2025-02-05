@@ -1,10 +1,10 @@
 use core::array;
 use std::{
     fmt::Display,
-    ops::{Add, Mul},
+    ops::{Add, Index, Mul},
 };
 
-fn for_each_m_n<F, const M: usize, const N: usize>(mut f: F)
+pub fn for_each_m_n<F, const M: usize, const N: usize>(mut f: F)
 where
     F: FnMut(usize, usize),
 {
@@ -15,16 +15,16 @@ where
     }
 }
 
-fn is_first_element(row: usize, col: usize) -> bool {
+pub fn is_first_element(row: usize, col: usize) -> bool {
     row == 0 && col == 0
 }
 
-fn non_first_element(row: usize, col: usize) -> bool {
+pub fn non_first_element(row: usize, col: usize) -> bool {
     !is_first_element(row, col)
 }
 ///M строки,N столбцы
 #[derive(Debug, PartialEq, Eq)]
-pub struct Matrix<T, const M: usize, const N: usize>(pub [[T; N]; M]);
+pub struct Matrix<T, const M: usize, const N: usize>([[T; N]; M]);
 
 //к сожалению derive на работает для Default для [[T; N]; M]
 impl<T, const M: usize, const N: usize> Default for Matrix<T, M, N>
@@ -34,6 +34,13 @@ where
     //default and zero matrix
     fn default() -> Self {
         Matrix(array::from_fn(|_| array::from_fn(|_| T::default())))
+    }
+}
+
+impl<T, const M: usize, const N: usize> Index<(usize, usize)> for Matrix<T, M, N> {
+    type Output = T;
+    fn index(&self, (row, col): (usize, usize)) -> &Self::Output {
+        &self.0[row][col]
     }
 }
 
