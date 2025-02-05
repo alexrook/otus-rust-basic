@@ -53,7 +53,7 @@ where
     for<'c> &'c T: Mul<Output = T>,
 {
     pub fn mul_el(self) -> T {
-        let mut buf = self.0[0][(0, 0)].clone(); //самый первый элемент самой первой матрицы
+        let mut buf = self[0][(0, 0)].clone(); //самый первый элемент самой первой матрицы
         let mut non_first_time = false;
 
         for matrix in self.0 {

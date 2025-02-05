@@ -118,8 +118,8 @@ impl<T, const M: usize, const N: usize> Matrix<T, M, N> {
                 panic!("L != M * N");
             }
         }
-        let dummy = array[0].clone();
-        let mut ret = Matrix(array::from_fn(|_| array::from_fn(|_| dummy.clone())));
+        let first_elem = array[0].clone(); //клонирование первого элемента во все ячейки позволяет избавиться от Default
+        let mut ret = Matrix(array::from_fn(|_| array::from_fn(|_| first_elem.clone())));
         //в данной матрице каждая строка M это массив 0..N
         for_each_m_n::<_, M, N>(|row, col| ret.0[row][col] = array[col + row * N].clone());
 
