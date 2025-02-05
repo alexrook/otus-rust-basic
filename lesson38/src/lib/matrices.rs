@@ -20,7 +20,7 @@ where
     }
 
     pub fn my_index<'c>(&'c self, index: usize) -> &'a Matrix<&'b T, M, N> {
-        self.0[index]
+        self[index] //Deref используется
     }
 
     pub fn len(&self) -> usize {
