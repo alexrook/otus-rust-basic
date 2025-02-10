@@ -56,6 +56,7 @@ impl Operation {
     }
 }
 
+///Банк имеет хранилище операций по счетам клиентов
 pub trait OpsStorage {
     fn transact(
         &mut self,
@@ -78,6 +79,7 @@ pub trait OpsStorage {
     fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err>;
 }
 
+///Банк имеет текущее "состояние" счетов клиентов
 pub trait State {
     fn transact<'a, 'b>(
         &'a mut self,
@@ -120,6 +122,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
                 .storage
                 .persist(op.clone())
                 .expect(format!("something wrong with history operation[{:?}]", op).as_str());
+
             let ret = bank.state.update(op);
 
             if let Some(err) = ret.err() {
@@ -131,7 +134,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     }
 
     //создание аккаунта
-    pub fn create_account(&mut self, account_id: AccountId) -> Result<&Account, Err> {
+    pub fn create_account(&mut self, account_id: &AccountId) -> Result<&Account, Err> {
         let op = Operation::Create(account_id.clone());
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
@@ -158,8 +161,12 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     }
 
     //Клиент может пополнить свой баланс.
-    pub fn deposit(&mut self, account_id: AccountId, money: NonZeroMoney) -> Result<&Account, Err> {
-        let op = Operation::Deposit(account_id, money);
+    pub fn deposit(
+        &mut self,
+        account_id: &AccountId,
+        money: NonZeroMoney,
+    ) -> Result<&Account, Err> {
+        let op = Operation::Deposit(account_id.clone(), money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
@@ -167,10 +174,10 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     //Клиент может забрать деньги
     pub fn withdraw(
         &mut self,
-        account_id: AccountId,
+        account_id: &AccountId,
         money: NonZeroMoney,
     ) -> Result<&Account, Err> {
-        let op = Operation::Withdraw(account_id, money);
+        let op = Operation::Withdraw(account_id.clone(), money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
@@ -178,8 +185,8 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     //перемещение денег от счета на счет
     pub fn move_money(
         &mut self,
-        from: AccountId,
-        to: AccountId,
+        from: &AccountId,
+        to: &AccountId,
         money: NonZeroMoney,
     ) -> Result<impl Iterator<Item = &Account>, Err> {
         if from.eq(to.as_str()) {
@@ -187,8 +194,8 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         }
 
         let ops = vec![
-            Operation::Withdraw(from, money),
-            Operation::Deposit(to, money),
+            Operation::Withdraw(from.clone(), money),
+            Operation::Deposit(to.clone(), money),
         ]
         .into_iter();
         //first save to storage
@@ -199,6 +206,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     }
 }
 
+//реализация State для банка в памяти
 #[derive(Debug, Default)]
 pub struct InMemoryState(HashMap<AccountId, Account>);
 
@@ -285,6 +293,8 @@ impl State for InMemoryState {
     }
 }
 
+//реализация хранилища операций банка в пмяти
+#[derive(Debug)]
 pub struct InMemoryOpsStorage {
     cur_key: OpId,
     by_ops_storage: BTreeMap<OpId, (AccountId, Operation)>,
@@ -304,8 +314,11 @@ impl Default for InMemoryOpsStorage {
 impl InMemoryOpsStorage {
     fn push_to_cols(&mut self, op: Operation) -> OpId {
         let new_key = self.cur_key.checked_add(1).unwrap();
+
         self.cur_key = new_key;
+
         let account_id = op.account_id().clone();
+
         self.by_ops_storage
             .insert(new_key, (account_id.clone(), op));
 
@@ -381,7 +394,7 @@ mod test {
         let acc_1 = "Acc_1".to_string();
         let acc_2 = "Acc_2".to_string();
 
-        let ret = Bank::create_account(&mut bank, acc_1.clone());
+        let ret = Bank::create_account(&mut bank, &acc_1);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -390,7 +403,7 @@ mod test {
             })
         );
 
-        let ret = Bank::create_account(&mut bank, acc_2.clone());
+        let ret = Bank::create_account(&mut bank, &acc_2);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -409,11 +422,10 @@ mod test {
         let acc_1 = "Acc_1".to_string();
         let acc_2 = "Acc_2".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
             ret,
@@ -423,8 +435,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_2.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
             ret,
@@ -435,7 +446,7 @@ mod test {
         );
 
         let ret: Result<&Account, String> = //acc_1 again
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+            bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
             ret,
@@ -454,11 +465,10 @@ mod test {
         let acc_1 = "Acc_1".to_string();
         let acc_2 = "Acc_2".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -467,8 +477,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_2.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -477,7 +486,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(acc_1.clone(), NonZeroMoney::MIN);
+        let ret: Result<&Account, String> = bank.withdraw(&acc_1, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -486,8 +495,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.withdraw(acc_1.clone(), NonZeroMoney::new(41).unwrap());
+        let ret: Result<&Account, String> = bank.withdraw(&acc_1, NonZeroMoney::new(41).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -496,7 +504,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(acc_2.clone(), NonZeroMoney::MIN);
+        let ret: Result<&Account, String> = bank.withdraw(&acc_2, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -505,7 +513,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(acc_2.clone(), NonZeroMoney::MAX);
+        let ret: Result<&Account, String> = bank.withdraw(&acc_2, NonZeroMoney::MAX);
         assert_eq!(ret, Err("Insufficient funds".to_string()));
     }
 
@@ -518,12 +526,11 @@ mod test {
         let acc_2 = "Acc_2".to_string();
         let acc_3 = "Acc_3".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
-        let _ = bank.create_account(acc_3.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -532,8 +539,7 @@ mod test {
             })
         );
         //acc_2 is untouched
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_3.clone(), NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -543,7 +549,7 @@ mod test {
         );
 
         let mut iter = bank
-            .move_money(acc_1.clone(), acc_2.clone(), NonZeroMoney::new(42).unwrap())
+            .move_money(&acc_1, &acc_2, NonZeroMoney::new(42).unwrap())
             .expect("should be Ok(iter)");
 
         let first = iter.next().expect("should be the acc_1 with their Account");
@@ -607,12 +613,11 @@ mod test {
         let acc_2 = "Acc_2".to_string();
         let acc_3 = "Acc_3".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
-        let _ = bank.create_account(acc_3.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -621,8 +626,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_3.clone(), NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -666,12 +670,11 @@ mod test {
         let acc_2 = "Acc_2".to_string();
         let acc_3 = "Acc_3".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
-        let _ = bank.create_account(acc_3.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -680,8 +683,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_3.clone(), NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -730,11 +732,10 @@ mod test {
         let acc_1 = "Acc_1".to_string();
         let acc_2 = "Acc_2".to_string();
 
-        let _ = bank.create_account(acc_1.clone());
-        let _ = bank.create_account(acc_2.clone());
+        let _ = bank.create_account(&acc_1);
+        let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_1.clone(), NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -743,8 +744,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> =
-            bank.deposit(acc_2.clone(), NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -754,7 +754,7 @@ mod test {
         );
 
         let _ = bank
-            .move_money(acc_1.clone(), acc_2.clone(), NonZeroMoney::new(42).unwrap())
+            .move_money(&acc_1, &acc_2, NonZeroMoney::new(42).unwrap())
             .expect("move should work");
 
         //let _: Vec<(_, _)> = iter.collect();
