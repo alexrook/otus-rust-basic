@@ -6,3 +6,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 tokio = { version = "1.43.0", features = ["full"] }
+serde = {version = "1.0.217", features = []}
+
+[lib]
+name = "common"         # The name of the target.
+path = "src/lib/lib.rs"
