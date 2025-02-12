@@ -2,12 +2,23 @@ use std::{
     collections::{BTreeMap, HashMap, LinkedList},
     num::{NonZeroU128, NonZeroU32},
 };
+use thiserror::Error;
 
 pub type AccountId = String;
 pub type Money = u32;
 pub type NonZeroMoney = NonZeroU32;
 pub type Err = String;
 pub type OpId = NonZeroU128;
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum BankError {
+    #[error("Something get wrong in the bank core facility[{0}]")]
+    CoreError(String),
+    #[error("This operation is'nt allowed[{0}]")]
+    Prohibited(String),
+    #[error("Bad request[{0}]")]
+    BadRequest(String),
+}
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Account {
@@ -61,13 +72,15 @@ pub trait OpsStorage {
     fn transact(
         &mut self,
         ops: impl Iterator<Item = Operation>,
-    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err>;
+    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError>;
 
-    fn persist(&mut self, op: Operation) -> Result<(OpId, &Operation), Err> {
+    fn persist(&mut self, op: Operation) -> Result<(OpId, &Operation), BankError> {
         self.transact(std::iter::once(op)).and_then(|mut iter| {
             iter.next()
                 .map(|(opt_id, op)| (opt_id, op))
-                .ok_or("a transaction should return at least one operation".to_owned())
+                .ok_or(BankError::CoreError(
+                    "a transaction should return at least one operation".to_owned(),
+                ))
         })
     }
     //should be O(N), where N - account ops
@@ -84,20 +97,20 @@ pub trait State {
     fn transact<'a, 'b>(
         &'a mut self,
         ops: impl Iterator<Item = &'b Operation>,
-    ) -> Result<impl Iterator<Item = &'a Account> + 'a, Err>;
+    ) -> Result<impl Iterator<Item = &'a Account> + 'a, BankError>;
 
-    fn update<'a, 'b>(&'a mut self, op: &'b Operation) -> Result<&'a Account, Err> {
+    fn update<'a, 'b>(&'a mut self, op: &'b Operation) -> Result<&'a Account, BankError> {
         self.transact(std::iter::once(op)).and_then(|mut iter| {
-            iter.next()
-                .map(|acc| acc)
-                .ok_or("a transaction should return at least one account".to_owned())
+            iter.next().map(|acc| acc).ok_or(BankError::CoreError(
+                "a transaction should return at least one account".to_owned(),
+            ))
         })
     }
     //should be O(N), where N - account ops
-    fn get_balance(&self, account_id: &AccountId) -> Result<&Account, Err>;
+    fn get_balance(&self, account_id: &AccountId) -> Result<&Account, BankError>;
 }
 
-pub struct Bank<T: OpsStorage, S: State> {
+pub struct Bank<T, S> {
     storage: T,
     state: S,
 }
@@ -134,14 +147,14 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     }
 
     //создание аккаунта
-    pub fn create_account(&mut self, account_id: &AccountId) -> Result<&Account, Err> {
+    pub fn create_account(&mut self, account_id: &AccountId) -> Result<&Account, BankError> {
         let op = Operation::Create(account_id.clone());
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
 
     //Клиент может получить свой баланс.
-    pub fn get_balance(&self, account_id: &AccountId) -> Result<&Account, Err> {
+    pub fn get_balance(&self, account_id: &AccountId) -> Result<&Account, BankError> {
         self.state.get_balance(account_id)
     }
 
@@ -165,7 +178,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         &mut self,
         account_id: &AccountId,
         money: NonZeroMoney,
-    ) -> Result<&Account, Err> {
+    ) -> Result<&Account, BankError> {
         let op = Operation::Deposit(account_id.clone(), money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
@@ -176,7 +189,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         &mut self,
         account_id: &AccountId,
         money: NonZeroMoney,
-    ) -> Result<&Account, Err> {
+    ) -> Result<&Account, BankError> {
         let op = Operation::Withdraw(account_id.clone(), money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
@@ -188,9 +201,11 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         from: &AccountId,
         to: &AccountId,
         money: NonZeroMoney,
-    ) -> Result<impl Iterator<Item = &Account>, Err> {
+    ) -> Result<impl Iterator<Item = &Account>, BankError> {
         if from.eq(to.as_str()) {
-            return Err(format!("Sending funds to yourself is prohibited"));
+            return Err(BankError::Prohibited(format!(
+                "Sending funds to yourself is prohibited"
+            )));
         }
 
         let ops = vec![
@@ -211,10 +226,16 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
 pub struct InMemoryState(HashMap<AccountId, Account>);
 
 impl<'a> InMemoryState {
-    fn push_to_col(&'a mut self, op: &'a Operation) -> Result<(&'a AccountId, &'a Account), Err> {
+    fn push_to_col(
+        &'a mut self,
+        op: &'a Operation,
+    ) -> Result<(&'a AccountId, &'a Account), BankError> {
         let account_id: &AccountId = match op {
             Operation::Create(account_id) if self.0.contains_key(account_id) => {
-                return Err(format!("Bank already contains account_id[{}]", account_id));
+                return Err(BankError::BadRequest(format!(
+                    "Bank already contains account_id[{}]",
+                    account_id
+                )));
             }
 
             Operation::Create(account_id) => {
@@ -237,13 +258,16 @@ impl<'a> InMemoryState {
                 if account.balance >= money.get() {
                     account.balance -= money.get();
                 } else {
-                    return Err("Insufficient funds".to_string());
+                    return Err(BankError::BadRequest("Insufficient funds".to_string()));
                 }
                 account_id
             }
 
             Operation::Withdraw(account_id, _) | Operation::Deposit(account_id, _) => {
-                return Err(format!("Bank doesnt contain account_id[{}]", account_id))
+                return Err(BankError::BadRequest(format!(
+                    "Bank doesnt contain account_id[{}]",
+                    account_id
+                )))
             }
 
             other => {
@@ -264,16 +288,17 @@ impl<'a> InMemoryState {
 }
 
 impl State for InMemoryState {
-    fn get_balance(&self, account_id: &AccountId) -> Result<&Account, Err> {
-        self.0
-            .get(account_id)
-            .ok_or(format!("Account[{}] not found in bank", account_id))
+    fn get_balance(&self, account_id: &AccountId) -> Result<&Account, BankError> {
+        self.0.get(account_id).ok_or(BankError::BadRequest(format!(
+            "Account[{}] not found in bank",
+            account_id
+        )))
     }
 
     fn transact<'a, 'b>(
         &'a mut self,
         ops: impl Iterator<Item = &'b Operation>,
-    ) -> Result<impl Iterator<Item = &'a Account> + 'a, Err> {
+    ) -> Result<impl Iterator<Item = &'a Account> + 'a, BankError> {
         let mut successful_accounts_ids = Vec::new();
 
         // Фаза 1: модификация данных
@@ -361,7 +386,7 @@ impl OpsStorage for InMemoryOpsStorage {
     fn transact(
         &mut self,
         ops: impl Iterator<Item = Operation>,
-    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err> {
+    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError> {
         let mut vec = Vec::new();
         for op in ops {
             let op_id = self.push_to_cols(op);
@@ -425,7 +450,7 @@ mod test {
         let _ = bank.create_account(&acc_1);
         let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
             ret,
@@ -435,7 +460,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
             ret,
@@ -445,7 +470,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = //acc_1 again
+        let ret: Result<&Account, BankError> = //acc_1 again
             bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
 
         assert_eq!(
@@ -468,7 +493,7 @@ mod test {
         let _ = bank.create_account(&acc_1);
         let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -477,7 +502,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_2, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -486,7 +511,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(&acc_1, NonZeroMoney::MIN);
+        let ret: Result<&Account, BankError> = bank.withdraw(&acc_1, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -495,7 +520,8 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(&acc_1, NonZeroMoney::new(41).unwrap());
+        let ret: Result<&Account, BankError> =
+            bank.withdraw(&acc_1, NonZeroMoney::new(41).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -504,7 +530,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(&acc_2, NonZeroMoney::MIN);
+        let ret: Result<&Account, BankError> = bank.withdraw(&acc_2, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -513,8 +539,11 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.withdraw(&acc_2, NonZeroMoney::MAX);
-        assert_eq!(ret, Err("Insufficient funds".to_string()));
+        let ret: Result<&Account, BankError> = bank.withdraw(&acc_2, NonZeroMoney::MAX);
+        assert_eq!(
+            ret,
+            Err(BankError::BadRequest("Insufficient funds".to_string()))
+        );
     }
 
     #[test]
@@ -530,7 +559,7 @@ mod test {
         let _ = bank.create_account(&acc_2);
         let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -539,7 +568,7 @@ mod test {
             })
         );
         //acc_2 is untouched
-        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -617,7 +646,7 @@ mod test {
         let _ = bank.create_account(&acc_2);
         let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -626,7 +655,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -674,7 +703,7 @@ mod test {
         let _ = bank.create_account(&acc_2);
         let _ = bank.create_account(&acc_3);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -683,7 +712,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_3, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -735,7 +764,7 @@ mod test {
         let _ = bank.create_account(&acc_1);
         let _ = bank.create_account(&acc_2);
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -744,7 +773,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.deposit(&acc_2, NonZeroMoney::new(21).unwrap());
+        let ret: Result<&Account, BankError> = bank.deposit(&acc_2, NonZeroMoney::new(21).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -759,7 +788,7 @@ mod test {
 
         //let _: Vec<(_, _)> = iter.collect();
 
-        let ret: Result<&Account, String> = bank.get_balance(&acc_2);
+        let ret: Result<&Account, BankError> = bank.get_balance(&acc_2);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -768,7 +797,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, String> = bank.get_balance(&acc_1);
+        let ret: Result<&Account, BankError> = bank.get_balance(&acc_1);
         assert_eq!(
             ret,
             Ok(&Account {
