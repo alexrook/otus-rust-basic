@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::{AccountId, Money, NonZeroMoney};
+use crate::bank::{AccountId, Money, NonZeroMoney};
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ClientRequest {

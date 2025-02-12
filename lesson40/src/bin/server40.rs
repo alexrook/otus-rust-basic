@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use common::{
-    core::{Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
+    bank::{Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
     protocol::{AccountRef, ClientRequest, ServerResponse},
 };
 use serde::Serialize;
@@ -62,7 +62,7 @@ async fn client_loop<T: OpsStorage, S: State>(
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
-                let ret: &common::core::Account = guard.create_account(&account_id)?;
+                let ret: &common::bank::Account = guard.create_account(&account_id)?;
 
                 let response = ServerResponse::AccountState(AccountRef {
                     account_id,
