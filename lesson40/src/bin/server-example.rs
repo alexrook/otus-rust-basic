@@ -60,6 +60,7 @@ async fn client_loop(
         tokio::select!(
             Ok(n) = stream.read_line(&mut buf) => {
                 if n == 0 {
+                    println!("[{addr}] Disconnected");
                     break;
                 }
                 println!("[{addr}] Message: {buf}");
