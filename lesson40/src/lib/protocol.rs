@@ -19,10 +19,17 @@ pub enum ClientRequest {
     Quit,                  //завершение сеанса
 }
 
+impl ClientRequest {
+    pub fn deserialize(encoded: &[u8]) -> Result<ClientRequest, bincode::Error> {
+        let actual: Result<ClientRequest, bincode::Error> = bincode::deserialize(&encoded);
+        actual
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountRef {
-    account_id: String,
-    balance: Money,
+    pub account_id: String,
+    pub balance: Money,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,15 +46,19 @@ pub enum ServerResponse {
     },
 }
 
+impl ServerResponse {
+    pub fn serialize(message: ServerResponse) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(&message)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
 
-    use serde::{Deserialize, Serialize};
-
-    use crate::protocol::{AccountRef, ServerResponse};
-
     use super::ClientRequest;
+    use crate::protocol::{AccountRef, ServerResponse};
+    use serde::{Deserialize, Serialize};
 
     fn test_base<T>(message: T)
     where
