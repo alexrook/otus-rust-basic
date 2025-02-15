@@ -7,7 +7,6 @@ use thiserror::Error;
 pub type AccountId = String;
 pub type Money = u32;
 pub type NonZeroMoney = NonZeroU32;
-pub type Err = String;
 pub type OpId = NonZeroU128;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -87,9 +86,9 @@ pub trait OpsStorage {
     fn get_ops<'a, 'b>(
         &'a self,
         account_id: &'b AccountId,
-    ) -> Result<impl Iterator<Item = (OpId, &'a Operation)>, Err>;
+    ) -> Result<impl Iterator<Item = (OpId, &'a Operation)>, BankError>;
     //should be O(M), where M - all ops
-    fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err>;
+    fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError>;
 }
 
 ///Банк имеет текущее "состояние" счетов клиентов
@@ -162,14 +161,14 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     pub fn get_account_ops<'a, 'b>(
         &'a self,
         account_id: &'b AccountId,
-    ) -> Result<impl Iterator<Item = (OpId, &'a Operation)> + 'b, String>
+    ) -> Result<impl Iterator<Item = (OpId, &'a Operation)> + 'b, BankError>
     where
         'a: 'b,
     {
         self.storage.get_ops(account_id)
     }
     //можно получить историю операций
-    pub fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, String> {
+    pub fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError> {
         self.storage.get_history()
     }
 
@@ -361,7 +360,7 @@ impl InMemoryOpsStorage {
 }
 
 impl OpsStorage for InMemoryOpsStorage {
-    fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err> {
+    fn get_history(&self) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError> {
         Ok(self
             .by_ops_storage
             .iter()
@@ -371,7 +370,7 @@ impl OpsStorage for InMemoryOpsStorage {
     fn get_ops(
         &self,
         account_id: &AccountId,
-    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, Err> {
+    ) -> Result<impl Iterator<Item = (OpId, &Operation)>, BankError> {
         self.by_acc_storage
                 .get(account_id)//O(1)
                 .map(|list| {
@@ -380,7 +379,7 @@ impl OpsStorage for InMemoryOpsStorage {
                         .expect(format!("something get wrong with your code, bsc by_ops_storage doesn't contain value for op_id[{}]",op_id).as_str());
                         (op_id.clone(),op)
                     })
-                }).ok_or(format!("There is no account[{}] in the bank",account_id))
+                }).ok_or(BankError::BadRequest(format!("There is no account[{}] in the bank",account_id)))
     }
 
     fn transact(
