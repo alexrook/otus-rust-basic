@@ -42,7 +42,6 @@ pub enum ServerResponse {
     },
     Error {
         message: String,
-        code: i32,
     },
 }
 
@@ -92,7 +91,6 @@ mod tests {
 
         test_base(ServerResponse::Error {
             message: "an error".to_owned(),
-            code: -123,
         });
     }
 }
