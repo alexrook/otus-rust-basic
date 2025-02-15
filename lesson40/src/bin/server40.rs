@@ -62,65 +62,95 @@ async fn client_loop<T: OpsStorage, S: State>(
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
-                let ret: &common::bank::Account = guard.create_account(&account_id)?;
+                let maybe_ret = guard.create_account(&account_id);
 
-                let response = ServerResponse::AccountState(AccountRef {
-                    account_id,
-                    balance: ret.balance,
-                });
+                let response = match maybe_ret {
+                    Ok(acc) => ServerResponse::AccountState(AccountRef {
+                        account_id: acc.account_id.clone(),
+                        balance: acc.balance,
+                    }),
+
+                    Err(bank_err) => ServerResponse::Error {
+                        message: bank_err.to_string(),
+                    },
+                };
+
                 drop(guard);
                 write_response(&mut stream, response).await?;
             }
             ClientRequest::Deposit(account_id, amount) => {
                 let mut guard = bank_ref.write().await;
-                let ret = guard.deposit(&account_id, amount)?;
-                let response = ServerResponse::AccountState(AccountRef {
-                    account_id,
-                    balance: ret.balance,
-                });
+                let maybe_ret = guard.deposit(&account_id, amount);
+                let response: ServerResponse = match maybe_ret {
+                    Ok(acc) => ServerResponse::AccountState(AccountRef {
+                        account_id,
+                        balance: acc.balance,
+                    }),
+                    Err(bank_err) => ServerResponse::Error {
+                        message: bank_err.to_string(),
+                    },
+                };
                 drop(guard);
                 write_response(&mut stream, response).await?;
             }
             ClientRequest::Withdraw(account_id, amount) => {
                 let mut guard = bank_ref.write().await;
-                let ret = guard.withdraw(&account_id, amount)?;
-                let response = ServerResponse::AccountState(AccountRef {
-                    account_id,
-                    balance: ret.balance,
-                });
+                let maybe_ret = guard.withdraw(&account_id, amount);
+                let response: ServerResponse = match maybe_ret {
+                    Ok(acc) => ServerResponse::AccountState(AccountRef {
+                        account_id,
+                        balance: acc.balance,
+                    }),
+                    Err(bank_err) => ServerResponse::Error {
+                        message: bank_err.to_string(),
+                    },
+                };
                 drop(guard);
                 write_response(&mut stream, response).await?;
             }
             ClientRequest::GetBalance(account_id) => {
                 let guard = bank_ref.read().await;
-                let ret = guard.get_balance(&account_id)?;
-                let response = ServerResponse::AccountState(AccountRef {
-                    account_id,
-                    balance: ret.balance,
-                });
+                let maybe_ret = guard.get_balance(&account_id);
+                let response: ServerResponse = match maybe_ret {
+                    Ok(acc) => ServerResponse::AccountState(AccountRef {
+                        account_id,
+                        balance: acc.balance,
+                    }),
+                    Err(bank_err) => ServerResponse::Error {
+                        message: bank_err.to_string(),
+                    },
+                };
                 drop(guard);
                 write_response(&mut stream, response).await?;
             }
             ClientRequest::Move { from, to, amount } => {
                 let mut guard = bank_ref.write().await;
-                let mut ret = guard.move_money(&from, &to, amount)?;
-                let from = ret.next().ok_or(BankError::CoreError(
-                    "the operation did not return the required number of elements".to_owned(),
-                ))?;
-                let to = ret.next().ok_or(BankError::CoreError(
-                    "the operation did not return the required number of elements".to_owned(),
-                ))?;
-                let response = ServerResponse::FundsMovement {
-                    from: AccountRef {
-                        account_id: from.account_id.clone(),
-                        balance: from.balance,
+                let maybe_ret = guard.move_money(&from, &to, amount).and_then(|mut iter| {
+                    let from = iter.next().ok_or(BankError::CoreError(
+                        "the operation did not return the required number of elements".to_owned(),
+                    ))?;
+                    let to = iter.next().ok_or(BankError::CoreError(
+                        "the operation did not return the required number of elements".to_owned(),
+                    ))?;
+                    Ok((from, to))
+                });
+
+                let response: ServerResponse = match maybe_ret {
+                    Ok((from, to)) => ServerResponse::FundsMovement {
+                        from: AccountRef {
+                            account_id: from.account_id.clone(),
+                            balance: from.balance,
+                        },
+                        to: AccountRef {
+                            account_id: to.account_id.clone(),
+                            balance: to.balance,
+                        },
                     },
-                    to: AccountRef {
-                        account_id: to.account_id.clone(),
-                        balance: to.balance,
+                    Err(bank_err) => ServerResponse::Error {
+                        message: bank_err.to_string(),
                     },
                 };
-                drop(ret);
+
                 drop(guard);
                 write_response(&mut stream, response).await?;
             }
