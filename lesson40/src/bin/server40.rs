@@ -80,8 +80,8 @@ async fn client_loop<T: OpsStorage, S: State>(
             client_request
         );
 
-        //код во многом дубдируется для match веток,
-        //к сожалению пока не придумал как отрефакторить
+        //код во многом дублируется для match веток,
+        //к сожалению, пока, не придумал как отрефакторить
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
