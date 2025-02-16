@@ -6,7 +6,6 @@ use common::{
 use ftail::Ftail;
 
 use std::{
-    fmt::Debug,
     io,
     io::{ErrorKind, Read, Write},
     net::TcpStream,
@@ -33,10 +32,7 @@ fn read_response_sync(stream: &mut TcpStream) -> anyhow::Result<ServerResponse> 
     Ok(ServerResponse::deserialize(&data_buf)?)
 }
 
-fn handle_connection<E>(stream: &mut TcpStream, requests: Vec<ClientRequest>) -> anyhow::Result<()>
-where
-    E: From<String> + Into<String> + Debug,
-{
+fn handle_connection(stream: &mut TcpStream, requests: Vec<ClientRequest>) -> anyhow::Result<()> {
     for req in requests {
         log::info!("Sending request[{:?}] to server", req);
         write_request_sync(stream, &req)?;
@@ -77,12 +73,12 @@ fn main() -> anyhow::Result<()> {
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:8080") {
         log::debug!("Connected to the server");
         let commands = vec![
-            ClientRequest::Create("acc1".to_string()),//BE при повторных запусках
+            ClientRequest::Create("acc1".to_string()), //BE при повторных запусках
             ClientRequest::GetBalance("acc1".to_string()),
             ClientRequest::Deposit("acc1".to_string(), NonZeroMoney::new(42).unwrap()),
             ClientRequest::Withdraw("acc1".to_string(), NonZeroMoney::new(12).unwrap()),
             ClientRequest::GetBalance("acc1".to_string()),
-            ClientRequest::Create("acc2".to_string()),//BE при повторных запусках
+            ClientRequest::Create("acc2".to_string()), //BE при повторных запусках
             //должна быть ошибка в логе даже при первом запуске
             ClientRequest::Withdraw("acc1".to_string(), NonZeroMoney::new(142).unwrap()),
             ClientRequest::Move {
@@ -95,7 +91,7 @@ fn main() -> anyhow::Result<()> {
             ClientRequest::Quit,
         ];
 
-        handle_connection::<String>(&mut stream, commands)
+        handle_connection(&mut stream, commands)
     } else {
         let msg = "Couldn't connect to server";
         log::error!("{}", msg);
