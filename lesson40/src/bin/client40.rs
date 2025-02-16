@@ -70,18 +70,21 @@ where
     Ok(())
 }
 
+//Если запускать клиент несколько раз, можно увидеть (ожидаемые) бизнес-ошибки при создании аккаунтов.
 fn main() -> anyhow::Result<()> {
     Ftail::new().console(log::LevelFilter::max()).init()?; //trace
 
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:8080") {
         log::debug!("Connected to the server");
         let commands = vec![
-            ClientRequest::Create("acc1".to_string()),
+            ClientRequest::Create("acc1".to_string()),//BE при повторных запусках
             ClientRequest::GetBalance("acc1".to_string()),
             ClientRequest::Deposit("acc1".to_string(), NonZeroMoney::new(42).unwrap()),
             ClientRequest::Withdraw("acc1".to_string(), NonZeroMoney::new(12).unwrap()),
             ClientRequest::GetBalance("acc1".to_string()),
-            ClientRequest::Create("acc2".to_string()),
+            ClientRequest::Create("acc2".to_string()),//BE при повторных запусках
+            //должна быть ошибка в логе даже при первом запуске
+            ClientRequest::Withdraw("acc1".to_string(), NonZeroMoney::new(142).unwrap()),
             ClientRequest::Move {
                 from: "acc1".to_string(),
                 to: "acc2".to_string(),
