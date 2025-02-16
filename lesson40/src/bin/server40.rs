@@ -22,6 +22,8 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(RwLock::new(bank));
 
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    log::debug!("is listening on localhost:8080");
+
     loop {
         let (stream, addr) = listener.accept().await?;
         log::debug!("New client connected");
@@ -41,7 +43,13 @@ async fn write_response(
     stream: &mut BufStream<TcpStream>,
     response: ServerResponse,
 ) -> anyhow::Result<()> {
-    log::info!("Sending response[{:?}] to client[{client_addr}]", response);
+    let msg = format!("Sending response[{:?}] to client[{client_addr}]", response);
+    if let ServerResponse::Error { message: _ } = response {
+        log::error!("{msg}");
+    } else {
+        log::info!("{msg}");
+    }
+
     let encoded: Vec<u8> = response.serialize()?;
     let len = (encoded.len() as u32).to_be_bytes(); // Записываем размер в big-endian
     stream.write_all(&len).await?; // Отправляем 4 байта длины
@@ -72,6 +80,8 @@ async fn client_loop<T: OpsStorage, S: State>(
             client_request
         );
 
+        //код во многом дубдируется для match веток,
+        //к сожалению пока не придумал как отрефакторить
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
