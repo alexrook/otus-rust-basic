@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
@@ -20,9 +20,12 @@ pub enum ClientRequest {
 }
 
 impl ClientRequest {
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(self)
+    }
+
     pub fn deserialize(encoded: &[u8]) -> Result<ClientRequest, bincode::Error> {
-        let actual: Result<ClientRequest, bincode::Error> = bincode::deserialize(&encoded);
-        actual
+        bincode::deserialize(&encoded)
     }
 }
 
@@ -30,6 +33,16 @@ impl ClientRequest {
 pub struct AccountRef {
     pub account_id: String,
     pub balance: Money,
+}
+
+impl Display for AccountRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Account with id[{}] and funds[{}]",
+            self.account_id, self.balance
+        )
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,11 +56,16 @@ pub enum ServerResponse {
     Error {
         message: String,
     },
+    Bye,
 }
 
 impl ServerResponse {
-    pub fn serialize(message: ServerResponse) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(&message)
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(self)
+    }
+
+    pub fn deserialize(encoded: &[u8]) -> Result<ServerResponse, bincode::Error> {
+        bincode::deserialize(&encoded)
     }
 }
 
