@@ -4,7 +4,9 @@ use common::{
     bank::{Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
     protocol::{AccountRef, ClientRequest, ServerResponse},
 };
-use serde::Serialize;
+
+use ftail::Ftail;
+
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufStream},
     net::{TcpListener, TcpStream},
@@ -13,6 +15,8 @@ use tokio::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    Ftail::new().console(log::LevelFilter::max()).init()?;
+
     let bank = Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
     let state = Arc::new(RwLock::new(bank));
@@ -20,31 +24,35 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8080").await?;
     loop {
         let (stream, addr) = listener.accept().await?;
+        log::debug!("New client connected");
         let bank_ref = Arc::clone(&state);
 
         tokio::spawn(async move {
-            match client_loop(stream, addr, bank_ref).await {
-                Ok(()) => println!("[{addr}] Client disconnected"),
-                Err(err) => println!("[{addr}] Client error: {err}"),
+            match client_loop(addr, stream, bank_ref).await {
+                Ok(()) => log::debug!("[{addr}] Client disconnected"),
+                Err(err) => log::error!("[{addr}] Client error: {err}"),
             }
         });
     }
 }
 
-async fn write_response<T>(stream: &mut BufStream<TcpStream>, message: T) -> anyhow::Result<()>
-where
-    T: Serialize,
-{
-    let encoded: Vec<u8> = bincode::serialize(&message).unwrap();
+async fn write_response(
+    client_addr: SocketAddr,
+    stream: &mut BufStream<TcpStream>,
+    response: ServerResponse,
+) -> anyhow::Result<()> {
+    log::info!("Sending response[{:?}] to client[{client_addr}]", response);
+    let encoded: Vec<u8> = response.serialize()?;
     let len = (encoded.len() as u32).to_be_bytes(); // Записываем размер в big-endian
     stream.write_all(&len).await?; // Отправляем 4 байта длины
     stream.write_all(&encoded).await?; // Отправляем само сообщение
+    stream.flush().await?;
     Ok(())
 }
 
 async fn client_loop<T: OpsStorage, S: State>(
+    client_addr: SocketAddr,
     stream: TcpStream,
-    addr: SocketAddr,
     bank_ref: Arc<RwLock<Bank<T, S>>>,
 ) -> anyhow::Result<()> {
     let mut stream = BufStream::new(stream);
@@ -59,12 +67,17 @@ async fn client_loop<T: OpsStorage, S: State>(
 
         let client_request = ClientRequest::deserialize(&data_buf)?;
 
+        log::info!(
+            "A client[{client_addr}] request[{:?}] recevied",
+            client_request
+        );
+
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
                 let maybe_ret = guard.create_account(&account_id);
 
-                let response = match maybe_ret {
+                let response: ServerResponse = match maybe_ret {
                     Ok(acc) => ServerResponse::AccountState(AccountRef {
                         account_id: acc.account_id.clone(),
                         balance: acc.balance,
@@ -76,8 +89,9 @@ async fn client_loop<T: OpsStorage, S: State>(
                 };
 
                 drop(guard);
-                write_response(&mut stream, response).await?;
+                write_response(client_addr, &mut stream, response).await?;
             }
+
             ClientRequest::Deposit(account_id, amount) => {
                 let mut guard = bank_ref.write().await;
                 let maybe_ret = guard.deposit(&account_id, amount);
@@ -91,8 +105,9 @@ async fn client_loop<T: OpsStorage, S: State>(
                     },
                 };
                 drop(guard);
-                write_response(&mut stream, response).await?;
+                write_response(client_addr, &mut stream, response).await?;
             }
+
             ClientRequest::Withdraw(account_id, amount) => {
                 let mut guard = bank_ref.write().await;
                 let maybe_ret = guard.withdraw(&account_id, amount);
@@ -106,8 +121,9 @@ async fn client_loop<T: OpsStorage, S: State>(
                     },
                 };
                 drop(guard);
-                write_response(&mut stream, response).await?;
+                write_response(client_addr, &mut stream, response).await?;
             }
+
             ClientRequest::GetBalance(account_id) => {
                 let guard = bank_ref.read().await;
                 let maybe_ret = guard.get_balance(&account_id);
@@ -121,8 +137,9 @@ async fn client_loop<T: OpsStorage, S: State>(
                     },
                 };
                 drop(guard);
-                write_response(&mut stream, response).await?;
+                write_response(client_addr, &mut stream, response).await?;
             }
+
             ClientRequest::Move { from, to, amount } => {
                 let mut guard = bank_ref.write().await;
                 let maybe_ret = guard.move_money(&from, &to, amount).and_then(|mut iter| {
@@ -152,9 +169,12 @@ async fn client_loop<T: OpsStorage, S: State>(
                 };
 
                 drop(guard);
-                write_response(&mut stream, response).await?;
+                write_response(client_addr, &mut stream, response).await?;
             }
+
             ClientRequest::Quit => {
+                log::info!("Client[{client_addr}] disconnection");
+                write_response(client_addr, &mut stream, ServerResponse::Bye).await?;
                 break;
             }
         }
