@@ -88,7 +88,7 @@ fn main() {
     thread::scope(|s| {
         fn run(commands: &Vec<Protocol>) {
             match run_client(commands) {
-                Ok(_) => todo!(),
+                Ok(_) => println!("Run client finished"),
                 Err(e) => eprintln!("Run client error[{}]", e),
             };
         }
