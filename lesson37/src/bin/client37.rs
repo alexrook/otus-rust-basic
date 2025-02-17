@@ -8,7 +8,7 @@ use std::{
     thread,
 };
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> io::Result<()>
+fn close<E>(stream: &mut TcpStream) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
@@ -27,7 +27,7 @@ where
     println!("handling connection from[{}] to the server", client_port);
     for req in requests {
         println!("Sending from[{}] request[{:?}] to server", client_port, req);
-        write_proto::<E>(stream, &req).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+        write_proto::<E>(stream, req).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
         let response =
             read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;

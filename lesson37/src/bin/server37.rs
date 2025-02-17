@@ -7,7 +7,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> io::Result<()>
+fn close<E>(stream: &mut TcpStream) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
@@ -18,8 +18,8 @@ where
     Ok(())
 }
 
-fn handle_connection<'a, 'b, T, S, E>(
-    stream: &'b mut TcpStream,
+fn handle_connection<T, S, E>(
+    stream: &mut TcpStream,
     bank: Arc<Mutex<Bank<T, S>>>,
 ) -> io::Result<()>
 where
@@ -48,8 +48,7 @@ where
 
                 let response = match bank_deal(&mut *guard, op) {
                     Ok(bank_accs) => {
-                        let cloned =
-                            Vec::from_iter(bank_accs.into_iter().map(|account| account.clone()));
+                        let cloned = Vec::from_iter(bank_accs.into_iter().cloned());
                         Protocol::Response(Ok(cloned))
                     }
                     Err(bank_err) => {
@@ -67,12 +66,12 @@ where
     }
 }
 
-fn bank_deal<'a, T, S>(bank: &'a mut Bank<T, S>, op: Operation) -> Result<Vec<&'a Account>, String>
+fn bank_deal<T, S>(bank: &mut Bank<T, S>, op: Operation) -> Result<Vec<&Account>, String>
 where
     T: OpsStorage,
     S: State,
 {
-    fn map_ret<'a>(ret: Result<&'a Account, String>) -> Result<Vec<&'a Account>, String> {
+    fn map_ret(ret: Result<&Account, String>) -> Result<Vec<&Account>, String> {
         ret.map(|account| vec![account])
     }
 
@@ -81,9 +80,9 @@ where
         Operation::Deposit(acc, amount) => map_ret(bank.deposit(acc, amount)),
         Operation::Withdraw(acc, amount) => map_ret(bank.withdraw(acc, amount)),
         Operation::GetBalance(acc) => map_ret(bank.get_balance(&acc)),
-        Operation::Move { from, to, amount } => bank
-            .move_money(from, to, amount)
-            .map(|iter| Vec::from_iter(iter)),
+        Operation::Move { from, to, amount } => {
+            bank.move_money(from, to, amount).map(Vec::from_iter)
+        }
     }
 }
 
