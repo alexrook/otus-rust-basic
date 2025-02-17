@@ -1,16 +1,17 @@
 use common::core::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
-use common::{core::Account, protocol::Protocol, protocol::IO};
+use common::protocol::{read_proto, write_proto};
+use common::{core::Account, protocol::Protocol};
 use std::fmt::Debug;
-use std::io::{Error, ErrorKind, Result as IOResult, Write};
+use std::io::{self, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> IOResult<()>
+fn close<'a, E>(stream: &'a mut TcpStream) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
-    IO::write::<E>(stream, &Protocol::Quit)
+    write_proto::<E>(stream, &Protocol::Quit)
         .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
     let _ = stream.flush()?;
     let _ = stream.shutdown(std::net::Shutdown::Both)?;
@@ -20,13 +21,14 @@ where
 fn handle_connection<'a, 'b, T, S, E>(
     stream: &'b mut TcpStream,
     bank: Arc<Mutex<Bank<T, S>>>,
-) -> IOResult<()>
+) -> io::Result<()>
 where
     T: OpsStorage,
     S: State,
     E: From<String> + Into<String> + Debug,
 {
-    let message = IO::read::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+    let message =
+        read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
     match message {
         Protocol::Quit => {
@@ -57,7 +59,7 @@ where
 
             drop(guard);
 
-            IO::write::<E>(stream, &response)
+            write_proto::<E>(stream, &response)
                 .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
             handle_connection::<T, S, E>(stream, Arc::clone(&bank))
         }
@@ -84,7 +86,7 @@ where
     }
 }
 
-fn main() -> IOResult<()> {
+fn main() -> io::Result<()> {
     let server = TcpListener::bind("127.0.0.1:8080")?;
 
     println!("Server is listening on 127.0.0.1:8080");

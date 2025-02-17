@@ -3,7 +3,7 @@ use common::protocol::*;
 use std::fmt::Debug;
 use std::{
     io,
-    io::{Error, ErrorKind,  Write},
+    io::{Error, ErrorKind, Write},
     net::TcpStream,
     thread,
 };
@@ -12,7 +12,7 @@ fn close<'a, E>(stream: &'a mut TcpStream) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
-    IO::write::<E>(stream, &Protocol::Quit)
+    write_proto::<E>(stream, &Protocol::Quit)
         .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
     let _ = stream.flush()?;
     let _ = stream.shutdown(std::net::Shutdown::Both)?;
@@ -27,10 +27,10 @@ where
     println!("handling connection from[{}] to the server", client_port);
     for req in requests {
         println!("Sending from[{}] request[{:?}] to server", client_port, req);
-        IO::write::<E>(stream, &req).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+        write_proto::<E>(stream, &req).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
         let response =
-            IO::read::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+            read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
         match response {
             Protocol::Quit => {

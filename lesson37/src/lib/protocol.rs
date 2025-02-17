@@ -16,37 +16,33 @@ pub enum Protocol {
     Quit,
 }
 
-pub struct IO;
+pub fn read_proto<E>(reader: &mut impl Read) -> Result<Protocol, E>
+where
+    E: From<String> + Debug,
+{
+    let mut magic_data = [0_u8; MAGIC_DATA_SIZE];
+    let _ = reader
+        .read_exact(&mut magic_data)
+        .map_err(|err| E::from(err.to_string()))?;
+    let total_size: u8 = MAGIC_DATA_SIZE as u8 + magic_data[1]; //total protocol message size
+    let mut buf = vec![0; total_size as usize];
+    buf[0] = magic_data[0]; //"восстанавливаем" первые два байта
+    buf[1] = magic_data[1];
+    let _ = reader //в остальные байты читаем сообщение
+        .read_exact(&mut buf[MAGIC_DATA_SIZE..])
+        .map_err(|err| E::from(err.to_string()))?;
 
-impl IO {
-    pub fn read<E>(reader: &mut impl Read) -> Result<Protocol, E>
-    where
-        E: From<String> + Debug,
-    {
-        let mut magic_data = [0_u8; MAGIC_DATA_SIZE];
-        let _ = reader
-            .read_exact(&mut magic_data)
-            .map_err(|err| E::from(err.to_string()))?;
-        let total_size: u8 = MAGIC_DATA_SIZE as u8 + magic_data[1]; //total protocol message size
-        let mut buf = vec![0; total_size as usize];
-        buf[0] = magic_data[0]; //"восстанавливаем" первые два байта
-        buf[1] = magic_data[1];
-        let _ = reader //в остальные байты читаем сообщение
-            .read_exact(&mut buf[MAGIC_DATA_SIZE..])
-            .map_err(|err| E::from(err.to_string()))?;
+    Protocol::deserialize(&buf).map(|(protocol, _)| protocol)
+}
 
-        Protocol::deserialize(&buf).map(|(protocol, _)| protocol)
-    }
-
-    pub fn write<E>(writer: &mut impl Write, protocol: &Protocol) -> Result<(), E>
-    where
-        E: From<String>,
-    {
-        let bytes = protocol.serialize();
-        writer
-            .write_all(&bytes)
-            .map_err(|err| E::from(err.to_string()))
-    }
+pub fn write_proto<E>(writer: &mut impl Write, protocol: &Protocol) -> Result<(), E>
+where
+    E: From<String>,
+{
+    let bytes = protocol.serialize();
+    writer
+        .write_all(&bytes)
+        .map_err(|err| E::from(err.to_string()))
 }
 
 #[cfg(test)]
@@ -66,7 +62,7 @@ mod tests {
 
             let mut slice = &bytes[..];
 
-            let actual: Result<Protocol, String> = IO::read(&mut slice);
+            let actual: Result<Protocol, String> = read_proto(&mut slice);
             assert!(actual.is_ok());
             assert_eq!(initial, actual.unwrap());
         }
@@ -99,7 +95,7 @@ mod tests {
 
             let mut slice = &bytes[..];
 
-            let actual: Result<Protocol, String> = IO::read(&mut slice);
+            let actual: Result<Protocol, String> = read_proto(&mut slice);
             assert!(actual.is_ok());
             assert_eq!(initial, actual.unwrap());
         }
@@ -127,7 +123,7 @@ mod tests {
     fn io_write_request_should_work() {
         fn test(initial: Protocol) {
             let mut writer: Vec<u8> = Vec::new();
-            let actual: Result<(), String> = IO::write(&mut writer, &initial);
+            let actual: Result<(), String> = write_proto(&mut writer, &initial);
             assert!(actual.is_ok());
 
             let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&writer);
@@ -162,7 +158,7 @@ mod tests {
     fn io_write_response_should_work() {
         fn test(initial: Protocol) {
             let mut writer: Vec<u8> = Vec::new();
-            let actual: Result<(), String> = IO::write(&mut writer, &initial);
+            let actual: Result<(), String> = write_proto(&mut writer, &initial);
             assert!(actual.is_ok());
 
             let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&writer);
@@ -193,10 +189,10 @@ mod tests {
     fn io_read_write_should_work() {
         fn test(initial: Protocol) {
             let mut buf: Vec<u8> = Vec::new();
-            let ret: Result<(), String> = IO::write(&mut buf, &initial);
+            let ret: Result<(), String> = write_proto(&mut buf, &initial);
             assert!(ret.is_ok());
 
-            let ret: Result<Protocol, String> = IO::read(&mut std::io::Cursor::new(buf));
+            let ret: Result<Protocol, String> = read_proto(&mut std::io::Cursor::new(buf));
             assert!(ret.is_ok());
             assert_eq!(initial, ret.unwrap());
         }
