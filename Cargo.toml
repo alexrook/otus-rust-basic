@@ -8,6 +8,7 @@ members = [
     "lesson27",
     "lesson30",
     "lesson34",
-    "lesson40"
+    "lesson37",
+    "lesson40",
 ]
 resolver = "2"
