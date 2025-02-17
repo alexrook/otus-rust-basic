@@ -27,41 +27,42 @@ where
     S: State,
     E: From<String> + Into<String> + Debug,
 {
-    let message =
-        read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+    loop {
+        let message =
+            read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
 
-    match message {
-        Protocol::Quit => {
-            println!("Quit command received");
-            return close::<E>(stream);
-        }
-        Protocol::Response(_) => {
-            eprintln!("Unexpected client behavior, it should only send Request and Quit protocol commands");
-            return close::<E>(stream);
-        }
-        Protocol::Request(op) => {
-            println!("Operation[{:?}] request received", op);
-            let mut guard = bank
-                .lock()
-                .expect("It's called PoisonError, so I prefer to panic here");
+        match message {
+            Protocol::Quit => {
+                println!("Quit command received");
+                break close::<E>(stream);
+            }
+            Protocol::Response(_) => {
+                eprintln!("Unexpected client behavior, it should only send Request and Quit protocol commands");
+                break close::<E>(stream);
+            }
+            Protocol::Request(op) => {
+                println!("Operation[{:?}] request received", op);
+                let mut guard = bank
+                    .lock()
+                    .expect("It's called PoisonError, so I prefer to panic here");
 
-            let response = match bank_deal(&mut *guard, op) {
-                Ok(bank_accs) => {
-                    let cloned =
-                        Vec::from_iter(bank_accs.into_iter().map(|account| account.clone()));
-                    Protocol::Response(Ok(cloned))
-                }
-                Err(bank_err) => {
-                    eprintln!("An error[{:?}] occurred while bank dealing", bank_err);
-                    Protocol::Response(Err(bank_err))
-                }
-            };
+                let response = match bank_deal(&mut *guard, op) {
+                    Ok(bank_accs) => {
+                        let cloned =
+                            Vec::from_iter(bank_accs.into_iter().map(|account| account.clone()));
+                        Protocol::Response(Ok(cloned))
+                    }
+                    Err(bank_err) => {
+                        eprintln!("An error[{:?}] occurred while bank dealing", bank_err);
+                        Protocol::Response(Err(bank_err))
+                    }
+                };
 
-            drop(guard);
+                drop(guard);
 
-            write_proto::<E>(stream, &response)
-                .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
-            handle_connection::<T, S, E>(stream, Arc::clone(&bank))
+                write_proto::<E>(stream, &response)
+                    .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+            }
         }
     }
 }
