@@ -2,12 +2,13 @@ use common::core::{NonZeroMoney, Operation};
 use common::protocol::*;
 use std::fmt::Debug;
 use std::{
-    io::{Error, ErrorKind, Result as IOResult, Write},
+    io,
+    io::{Error, ErrorKind,  Write},
     net::TcpStream,
     thread,
 };
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> IOResult<()>
+fn close<'a, E>(stream: &'a mut TcpStream) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
@@ -18,7 +19,7 @@ where
     Ok(())
 }
 
-fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<Protocol>) -> IOResult<()>
+fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<Protocol>) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
@@ -104,7 +105,7 @@ fn main() {
     });
 }
 
-fn run_client(commands: &Vec<Protocol>) -> IOResult<()> {
+fn run_client(commands: &Vec<Protocol>) -> io::Result<()> {
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:8080") {
         handle_connection::<String>(&mut stream, commands)
     } else {

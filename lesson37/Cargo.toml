@@ -7,12 +7,4 @@ edition = "2021"
 name = "common"         # The name of the target.
 path = "src/lib/lib.rs"
 
-[[bin]]
-name = "server37"
-path = "src/server/server.rs"
-
-[[bin]]
-name = "client37"
-path = "src/client/client.rs"
-
 [dependencies]
