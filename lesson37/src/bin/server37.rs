@@ -1,9 +1,9 @@
 use common::bank::Account;
 use common::bank::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
-use common::protocol::{AccountRef, ClientRequest, ServerResponse};
+use common::protocol::{self, AccountRef, ClientRequest, ServerResponse};
 use ftail::Ftail;
 use std::fmt::Debug;
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::io::{self, Error, ErrorKind, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -20,24 +20,11 @@ where
 }
 
 fn read_request(stream: &mut TcpStream) -> io::Result<ClientRequest> {
-    let mut size_buf = [0u8; 4]; // Буфер для длины
-    stream.read_exact(&mut size_buf)?; // Читаем ровно 4 байта
-    let size = u32::from_be_bytes(size_buf) as usize; // Получаем размер пакета
-
-    let mut data_buf = vec![0; size];
-    stream.read_exact(&mut data_buf)?; // Читаем ровно `size` байтов
-
-    ClientRequest::deserialize(&data_buf).map_err(|e| Error::new(ErrorKind::BrokenPipe, e))
+    protocol::read(stream)
 }
 
 fn write_response(stream: &mut TcpStream, response: &ServerResponse) -> io::Result<()> {
-    let encoded: Vec<u8> = response
-        .serialize()
-        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e))?;
-    let len = (encoded.len() as u32).to_be_bytes();
-    stream.write_all(&len)?;
-    stream.write_all(&encoded)?;
-    Ok(())
+    protocol::write(stream, response)
 }
 
 fn handle_connection<T, S, E>(

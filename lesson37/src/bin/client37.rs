@@ -1,11 +1,11 @@
 use common::bank::NonZeroMoney;
-use common::protocol::*;
+use common::protocol::{self, *};
 use ftail::Ftail;
 use std::fmt::Debug;
-use std::io::Read;
+
 use std::{
     io,
-    io::{Error, ErrorKind, Write},
+    io::{Error, ErrorKind},
     net::TcpStream,
     thread,
 };
@@ -15,25 +15,12 @@ fn close(stream: &mut TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-fn write_request(stream: &mut TcpStream, req: &ClientRequest) -> io::Result<()> {
-    let encoded: Vec<u8> = req
-        .serialize()
-        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e))?;
-    let len = (encoded.len() as u32).to_be_bytes();
-    stream.write_all(&len)?;
-    stream.write_all(&encoded)?;
-    Ok(())
+fn write_request(stream: &mut TcpStream, request: &ClientRequest) -> io::Result<()> {
+    protocol::write(stream, request)
 }
 
 fn read_response(stream: &mut TcpStream) -> io::Result<ServerResponse> {
-    let mut size_buf = [0u8; 4]; // Буфер для длины
-    stream.read_exact(&mut size_buf)?;
-    let size = u32::from_be_bytes(size_buf) as usize; // Получаем размер пакета
-
-    let mut data_buf = vec![0; size];
-    stream.read_exact(&mut data_buf)?;
-
-    ServerResponse::deserialize(&data_buf).map_err(|e| Error::new(ErrorKind::BrokenPipe, e))
+    protocol::read(stream)
 }
 
 fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<ClientRequest>) -> io::Result<()>

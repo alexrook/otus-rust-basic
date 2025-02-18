@@ -1,4 +1,7 @@
-use std::{fmt::Debug, fmt::Display};
+use std::{
+    fmt::{Debug, Display},
+    io::{self, Read, Write},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +71,29 @@ impl ServerResponse {
     pub fn deserialize(encoded: &[u8]) -> Result<ServerResponse, bincode::Error> {
         bincode::deserialize(&encoded)
     }
+}
+
+pub fn write<T: Serialize>(stream: &mut impl Write, entity: &T) -> io::Result<()> {
+    let encoded: Vec<u8> =
+        bincode::serialize(&entity).map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
+    let len = (encoded.len() as u32).to_be_bytes();
+    stream.write_all(&len)?;
+    stream.write_all(&encoded)?;
+    Ok(())
+}
+
+pub fn read<T>(stream: &mut impl Read) -> io::Result<T>
+where
+    for<'a> T: Deserialize<'a>,
+{
+    let mut size_buf = [0u8; 4]; // Буфер для длины
+    stream.read_exact(&mut size_buf)?;
+    let size = u32::from_be_bytes(size_buf) as usize; // Получаем размер пакета
+
+    let mut data_buf = vec![0; size];
+    stream.read_exact(&mut data_buf)?;
+
+    bincode::deserialize(&data_buf).map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))
 }
 
 #[cfg(test)]
