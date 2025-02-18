@@ -2,7 +2,7 @@ use std::{fmt::Debug, fmt::Display};
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::{AccountId, Money, NonZeroMoney};
+use crate::bank::{AccountId, Money, NonZeroMoney};
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ClientRequest {
@@ -76,7 +76,7 @@ mod tests {
 
     use super::ClientRequest;
     use crate::{
-        core::NonZeroMoney,
+        bank::NonZeroMoney,
         protocol::{AccountRef, ServerResponse},
     };
     use serde::{Deserialize, Serialize};

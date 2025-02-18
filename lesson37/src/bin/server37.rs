@@ -1,5 +1,5 @@
-use common::core::Account;
-use common::core::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
+use common::bank::Account;
+use common::bank::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
 use common::protocol::{AccountRef, ClientRequest, ServerResponse};
 use ftail::Ftail;
 use std::fmt::Debug;

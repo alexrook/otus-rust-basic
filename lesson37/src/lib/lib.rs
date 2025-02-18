@@ -1,2 +1,2 @@
-pub mod core;
+pub mod bank;
 pub mod protocol;

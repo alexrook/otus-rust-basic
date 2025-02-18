@@ -1,4 +1,4 @@
-use common::core::NonZeroMoney;
+use common::bank::NonZeroMoney;
 use common::protocol::*;
 use ftail::Ftail;
 use std::fmt::Debug;
