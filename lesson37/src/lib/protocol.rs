@@ -1,228 +1,119 @@
-use std::{
-    fmt::Debug,
-    io::{Read, Write},
-};
+use std::{fmt::Debug, fmt::Display};
 
-use crate::{
-    constants::MAGIC_DATA_SIZE,
-    core::{Account, Operation},
-    ser_de::{Deserializable, Serializable},
-};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Protocol {
-    Request(Operation),
-    Response(Result<Vec<Account>, String>),
-    Quit,
+use crate::core::{AccountId, Money, NonZeroMoney};
+
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ClientRequest {
+    Create(AccountId),                 //регистрация счёта
+    Deposit(AccountId, NonZeroMoney),  //пополнение
+    Withdraw(AccountId, NonZeroMoney), //снятие
+    Move {
+        //перевод
+        from: AccountId,
+        to: AccountId,
+        amount: NonZeroMoney,
+    },
+    GetBalance(AccountId), //получение баланса
+    Quit,                  //завершение сеанса
 }
 
-pub fn read_proto<E>(reader: &mut impl Read) -> Result<Protocol, E>
-where
-    E: From<String> + Debug,
-{
-    let mut magic_data = [0_u8; MAGIC_DATA_SIZE];
-    reader
-        .read_exact(&mut magic_data)
-        .map_err(|err| E::from(err.to_string()))?;
-    let total_size: u8 = MAGIC_DATA_SIZE as u8 + magic_data[1]; //total protocol message size
-    let mut buf = vec![0; total_size as usize];
-    buf[0] = magic_data[0]; //"восстанавливаем" первые два байта
-    buf[1] = magic_data[1];
-    reader //в остальные байты читаем сообщение
-        .read_exact(&mut buf[MAGIC_DATA_SIZE..])
-        .map_err(|err| E::from(err.to_string()))?;
+impl ClientRequest {
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(self)
+    }
 
-    Protocol::deserialize(&buf).map(|(protocol, _)| protocol)
+    pub fn deserialize(encoded: &[u8]) -> Result<ClientRequest, bincode::Error> {
+        bincode::deserialize(&encoded)
+    }
 }
 
-pub fn write_proto<E>(writer: &mut impl Write, protocol: &Protocol) -> Result<(), E>
-where
-    E: From<String>,
-{
-    let bytes = protocol.serialize();
-    writer
-        .write_all(&bytes)
-        .map_err(|err| E::from(err.to_string()))
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountRef {
+    pub account_id: String,
+    pub balance: Money,
+}
+
+impl Display for AccountRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Account with id[{}] and funds[{}]",
+            self.account_id, self.balance
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServerResponse {
+    AccountState(AccountRef), //Create, Deposit, Withdraw, GetBalance ops response
+    FundsMovement {
+        //Move op response
+        from: AccountRef,
+        to: AccountRef,
+        amount: NonZeroMoney,
+    },
+    Error {
+        message: String,
+    },
+    Bye,
+}
+
+impl ServerResponse {
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(self)
+    }
+
+    pub fn deserialize(encoded: &[u8]) -> Result<ServerResponse, bincode::Error> {
+        bincode::deserialize(&encoded)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::*;
-    use crate::ser_de::*;
+    use std::fmt::Debug;
 
-    use super::*;
+    use super::ClientRequest;
+    use crate::{
+        core::NonZeroMoney,
+        protocol::{AccountRef, ServerResponse},
+    };
+    use serde::{Deserialize, Serialize};
 
-    #[test]
-    fn io_read_request_should_work() {
-        fn test(initial: Protocol) {
-            let bytes: Vec<u8> = initial.serialize();
-
-            let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&bytes);
-            assert!(deserialized.is_ok());
-
-            let mut slice = &bytes[..];
-
-            let actual: Result<Protocol, String> = read_proto(&mut slice);
-            assert!(actual.is_ok());
-            assert_eq!(initial, actual.unwrap());
-        }
-
-        test(Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::MAX,
-        )));
-
-        test(Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::MIN,
-        )));
-
-        test(Protocol::Request(Operation::Create("acc1".to_string())));
-
-        test(Protocol::Request(Operation::Withdraw(
-            "acc1".to_string(),
-            NonZeroMoney::new(42).unwrap(),
-        )));
+    fn test_base<T>(message: T)
+    where
+        T: Serialize + Eq + Debug,
+        for<'a> T: Deserialize<'a>,
+    {
+        let encoded: Vec<u8> = bincode::serialize(&message).unwrap();
+        let actual: Result<T, bincode::Error> = bincode::deserialize(&encoded);
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), message);
     }
 
     #[test]
-    fn io_read_response_should_work() {
-        fn test(initial: Protocol) {
-            let bytes: Vec<u8> = initial.serialize();
+    fn test_client_marshalling() {
+        test_base(ClientRequest::Create("acc1".to_owned()));
+        test_base(ClientRequest::Quit);
+    }
 
-            let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&bytes);
-            assert!(deserialized.is_ok());
-
-            let mut slice = &bytes[..];
-
-            let actual: Result<Protocol, String> = read_proto(&mut slice);
-            assert!(actual.is_ok());
-            assert_eq!(initial, actual.unwrap());
-        }
-
-        test(Protocol::Response(Ok(vec![Account {
-            account_id: "acc1".to_string(),
-            balance: 42,
-        }])));
-
-        test(Protocol::Response(Ok(vec![
-            Account {
-                account_id: "acc1".to_string(),
+    #[test]
+    fn test_server_marshalling() {
+        test_base(ServerResponse::FundsMovement {
+            from: AccountRef {
+                account_id: "acc1".to_owned(),
+                balance: 120,
+            },
+            to: AccountRef {
+                account_id: "acc2".to_owned(),
                 balance: 42,
             },
-            Account {
-                account_id: "acc2".to_string(),
-                balance: 0,
-            },
-        ])));
+            amount: NonZeroMoney::new(23).unwrap(),
+        });
 
-        test(Protocol::Response(Err("an error".to_string())));
-    }
-
-    #[test]
-    fn io_write_request_should_work() {
-        fn test(initial: Protocol) {
-            let mut writer: Vec<u8> = Vec::new();
-            let actual: Result<(), String> = write_proto(&mut writer, &initial);
-            assert!(actual.is_ok());
-
-            let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&writer);
-            assert!(deserialized.is_ok());
-            assert_eq!(initial, deserialized.unwrap().0);
-        }
-
-        test(Protocol::Request(Operation::Move {
-            from: "acc1".to_string(),
-            to: "acc2".to_string(),
-            amount: NonZeroMoney::MIN,
-        }));
-        test(Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::MAX,
-        )));
-
-        test(Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::MIN,
-        )));
-
-        test(Protocol::Request(Operation::Create("acc1".to_string())));
-
-        test(Protocol::Request(Operation::Withdraw(
-            "acc1".to_string(),
-            NonZeroMoney::new(42).unwrap(),
-        )));
-    }
-
-    #[test]
-    fn io_write_response_should_work() {
-        fn test(initial: Protocol) {
-            let mut writer: Vec<u8> = Vec::new();
-            let actual: Result<(), String> = write_proto(&mut writer, &initial);
-            assert!(actual.is_ok());
-
-            let deserialized: DesResult<Protocol, String> = Protocol::deserialize(&writer);
-            assert!(deserialized.is_ok());
-            assert_eq!(initial, deserialized.unwrap().0);
-        }
-
-        test(Protocol::Response(Ok(vec![Account {
-            account_id: "acc1".to_string(),
-            balance: 42,
-        }])));
-
-        test(Protocol::Response(Ok(vec![
-            Account {
-                account_id: "acc1".to_string(),
-                balance: 42,
-            },
-            Account {
-                account_id: "acc2".to_string(),
-                balance: 0,
-            },
-        ])));
-
-        test(Protocol::Response(Err("an error".to_string())));
-    }
-
-    #[test]
-    fn io_read_write_should_work() {
-        fn test(initial: Protocol) {
-            let mut buf: Vec<u8> = Vec::new();
-            let ret: Result<(), String> = write_proto(&mut buf, &initial);
-            assert!(ret.is_ok());
-
-            let ret: Result<Protocol, String> = read_proto(&mut std::io::Cursor::new(buf));
-            assert!(ret.is_ok());
-            assert_eq!(initial, ret.unwrap());
-        }
-
-        test(Protocol::Request(Operation::Move {
-            from: "acc1".to_string(),
-            to: "acc2".to_string(),
-            amount: NonZeroMoney::MIN,
-        }));
-        test(Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::MAX,
-        )));
-
-        test(Protocol::Response(Ok(vec![Account {
-            account_id: "acc1".to_string(),
-            balance: 42,
-        }])));
-
-        test(Protocol::Response(Ok(vec![
-            Account {
-                account_id: "acc1".to_string(),
-                balance: 42,
-            },
-            Account {
-                account_id: "acc2".to_string(),
-                balance: 0,
-            },
-        ])));
-
-        test(Protocol::Response(Ok(Vec::new()))); //TODO: Should an empty answer be prohibited?
+        test_base(ServerResponse::Error {
+            message: "an error".to_owned(),
+        });
     }
 }
