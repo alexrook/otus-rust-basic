@@ -1,6 +1,8 @@
-use common::core::{NonZeroMoney, Operation};
+use common::core::NonZeroMoney;
 use common::protocol::*;
+use ftail::Ftail;
 use std::fmt::Debug;
+use std::io::Read;
 use std::{
     io,
     io::{Error, ErrorKind, Write},
@@ -8,88 +10,95 @@ use std::{
     thread,
 };
 
-fn close<E>(stream: &mut TcpStream) -> io::Result<()>
-where
-    E: From<String> + Into<String> + Debug,
-{
-    write_proto::<E>(stream, &Protocol::Quit)
-        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
-    stream.flush()?;
+fn close(stream: &mut TcpStream) -> io::Result<()> {
     stream.shutdown(std::net::Shutdown::Both)?;
     Ok(())
 }
 
-fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<Protocol>) -> io::Result<()>
+fn write_request(stream: &mut TcpStream, req: &ClientRequest) -> io::Result<()> {
+    let encoded: Vec<u8> = req
+        .serialize()
+        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e))?;
+    let len = (encoded.len() as u32).to_be_bytes();
+    stream.write_all(&len)?;
+    stream.write_all(&encoded)?;
+    Ok(())
+}
+
+fn read_response(stream: &mut TcpStream) -> io::Result<ServerResponse> {
+    let mut size_buf = [0u8; 4]; // Буфер для длины
+    stream.read_exact(&mut size_buf)?;
+    let size = u32::from_be_bytes(size_buf) as usize; // Получаем размер пакета
+
+    let mut data_buf = vec![0; size];
+    stream.read_exact(&mut data_buf)?;
+
+    ServerResponse::deserialize(&data_buf).map_err(|e| Error::new(ErrorKind::BrokenPipe, e))
+}
+
+fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<ClientRequest>) -> io::Result<()>
 where
     E: From<String> + Into<String> + Debug,
 {
     let client_port = stream.local_addr().unwrap().port();
-    println!("handling connection from[{}] to the server", client_port);
+    log::info!("handling connection from[{}] to the server", client_port);
     for req in requests {
-        println!("Sending from[{}] request[{:?}] to server", client_port, req);
-        write_proto::<E>(stream, req).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+        log::info!("Sending from[{}] request[{:?}] to server", client_port, req);
 
-        let response =
-            read_proto::<E>(stream).map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
+        write_request(stream, req)?;
+
+        let response: ServerResponse = read_response(stream)?;
 
         match response {
-            Protocol::Quit => {
-                println!("Quit command received for[{}]", client_port);
-                return close::<E>(stream);
-            }
-            Protocol::Response(ret) => match ret {
-                Ok(accs) => {
-                    println!(
-                        "The server returned a successful response.[{:?}] to[{}]",
-                        accs, client_port
-                    );
+
+            ServerResponse::AccountState(account_ref) => log::info!("Client[{client_port}]:The server returned an account[{account_ref}]"),
+
+            ServerResponse::FundsMovement { from, to, amount } => log::info!(
+                "Client[{client_port}]:The server moved money[{amount}] successfully from[{from}] to[{to}]"
+            ),
+
+            ServerResponse::Error { message }=>
+                log::error!(
+                    "Client[{client_port}]:An error[{message}] occurred while server negotiation with client"
+                ),
+            ServerResponse::Bye=>{
+                    log::debug!("Client[{client_port}]:The server said goodbye");
+                    close(stream)?;
                 }
-                Err(err) => {
-                    eprintln!(
-                        "An error[{:?}] occurred while server negotiation with[{}]",
-                        err, client_port
-                    );
-                }
-            },
-            Protocol::Request(_) => {
-                eprintln!("Unexpected server behavior, it should only send Response and Quit protocol commands");
-                return close::<E>(stream);
-            }
         }
     }
 
     Ok(())
 }
 
-fn main() {
+fn main() -> io::Result<()> {
+    Ftail::new()
+        .console(log::LevelFilter::max())
+        .init()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+
     let commands = vec![
-        Protocol::Request(Operation::Create("acc1".to_string())),
-        Protocol::Request(Operation::GetBalance("acc1".to_string())),
-        Protocol::Request(Operation::Deposit(
-            "acc1".to_string(),
-            NonZeroMoney::new(42).unwrap(),
-        )),
-        Protocol::Request(Operation::Withdraw(
-            "acc1".to_string(),
-            NonZeroMoney::new(12).unwrap(),
-        )),
-        Protocol::Request(Operation::GetBalance("acc1".to_string())),
-        Protocol::Request(Operation::Create("acc2".to_string())),
-        Protocol::Request(Operation::Move {
+        ClientRequest::Create("acc1".to_string()),
+        ClientRequest::GetBalance("acc1".to_string()),
+        ClientRequest::Deposit("acc1".to_string(), NonZeroMoney::new(42).unwrap()),
+        ClientRequest::Withdraw("acc1".to_string(), NonZeroMoney::new(12).unwrap()),
+        ClientRequest::GetBalance("acc1".to_string()),
+        ClientRequest::Create("acc2".to_string()),
+        ClientRequest::Move {
             from: "acc1".to_string(),
             to: "acc2".to_string(),
             amount: NonZeroMoney::new(12).unwrap(),
-        }),
-        Protocol::Request(Operation::GetBalance("acc1".to_string())),
-        Protocol::Request(Operation::GetBalance("acc2".to_string())),
-        Protocol::Quit,
+        },
+        ClientRequest::GetBalance("acc1".to_string()),
+        ClientRequest::GetBalance("acc2".to_string()),
+        ClientRequest::Quit,
     ];
 
     thread::scope(|s| {
-        fn run(commands: &Vec<Protocol>) {
+        fn run(commands: &Vec<ClientRequest>) {
             match run_client(commands) {
-                Ok(_) => println!("Run client finished"),
-                Err(e) => eprintln!("Run client error[{}]", e),
+                Ok(_) => log::debug!("Run client finished"),
+                Err(e) => log::error!("Run client error[{}]", e),
             };
         }
 
@@ -103,14 +112,16 @@ fn main() {
             run(&commands);
         });
     });
+
+    Ok(())
 }
 
-fn run_client(commands: &Vec<Protocol>) -> io::Result<()> {
+fn run_client(commands: &Vec<ClientRequest>) -> io::Result<()> {
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:8080") {
         handle_connection::<String>(&mut stream, commands)
     } else {
         let msg = "Couldn't connect to server";
-        eprintln!("{}", msg);
+        log::error!("{}", msg);
         Err(Error::new(ErrorKind::BrokenPipe, msg))
     }
 }
