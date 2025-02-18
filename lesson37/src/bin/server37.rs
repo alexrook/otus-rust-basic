@@ -3,7 +3,7 @@ use common::bank::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorag
 use common::protocol::{self, AccountRef, ClientRequest, ServerResponse};
 use ftail::Ftail;
 use std::fmt::Debug;
-use std::io::{self, Error, ErrorKind, Write};
+use std::io::{self, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -13,7 +13,7 @@ where
     E: From<String> + Into<String> + Debug,
 {
     write_response(stream, &ServerResponse::Bye)
-        .map_err(|e| Error::new(ErrorKind::BrokenPipe, e))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
     stream.flush()?;
     stream.shutdown(std::net::Shutdown::Both)?;
     Ok(())
@@ -24,7 +24,8 @@ fn read_request(stream: &mut TcpStream) -> io::Result<ClientRequest> {
 }
 
 fn write_response(stream: &mut TcpStream, response: &ServerResponse) -> io::Result<()> {
-    protocol::write(stream, response)
+    protocol::write(stream, response)?;
+    stream.flush()
 }
 
 fn handle_connection<T, S, E>(
@@ -60,7 +61,7 @@ where
         let response = bank_deal(&mut *guard, op);
         drop(guard);
 
-        write_response(stream, &response).map_err(|e| Error::new(ErrorKind::BrokenPipe, e))?;
+        write_response(stream, &response).map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
     }
 }
 
@@ -112,7 +113,7 @@ fn main() -> io::Result<()> {
     Ftail::new()
         .console(log::LevelFilter::max())
         .init()
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     let server = TcpListener::bind("127.0.0.1:8080")?;
 

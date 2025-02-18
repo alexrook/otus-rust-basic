@@ -4,8 +4,7 @@ use ftail::Ftail;
 use std::fmt::Debug;
 
 use std::{
-    io,
-    io::{Error, ErrorKind},
+    io::{self, Write},
     net::TcpStream,
     thread,
 };
@@ -16,7 +15,8 @@ fn close(stream: &mut TcpStream) -> io::Result<()> {
 }
 
 fn write_request(stream: &mut TcpStream, request: &ClientRequest) -> io::Result<()> {
-    protocol::write(stream, request)
+    protocol::write(stream, request)?;
+    stream.flush()
 }
 
 fn read_response(stream: &mut TcpStream) -> io::Result<ServerResponse> {
@@ -62,7 +62,7 @@ fn main() -> io::Result<()> {
     Ftail::new()
         .console(log::LevelFilter::max())
         .init()
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     let commands = vec![
         ClientRequest::Create("acc1".to_string()),
@@ -109,6 +109,6 @@ fn run_client(commands: &Vec<ClientRequest>) -> io::Result<()> {
     } else {
         let msg = "Couldn't connect to server";
         log::error!("{}", msg);
-        Err(Error::new(ErrorKind::BrokenPipe, msg))
+        Err(io::Error::new(io::ErrorKind::BrokenPipe, msg))
     }
 }
