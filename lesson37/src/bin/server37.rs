@@ -2,16 +2,12 @@ use common::bank::Account;
 use common::bank::{Bank, InMemoryOpsStorage, InMemoryState, Operation, OpsStorage, State};
 use common::protocol::{self, AccountRef, ClientRequest, ServerResponse};
 use ftail::Ftail;
-use std::fmt::Debug;
 use std::io::{self, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-fn close<E>(stream: &mut TcpStream) -> io::Result<()>
-where
-    E: From<String> + Into<String> + Debug,
-{
+fn close(stream: &mut TcpStream) -> io::Result<()> {
     write_response(stream, &ServerResponse::Bye)
         .map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
     stream.flush()?;
@@ -28,14 +24,10 @@ fn write_response(stream: &mut TcpStream, response: &ServerResponse) -> io::Resu
     stream.flush()
 }
 
-fn handle_connection<T, S, E>(
-    stream: &mut TcpStream,
-    bank: Arc<Mutex<Bank<T, S>>>,
-) -> io::Result<()>
+fn handle_connection<T, S>(stream: &mut TcpStream, bank: Arc<Mutex<Bank<T, S>>>) -> io::Result<()>
 where
     T: OpsStorage,
     S: State,
-    E: From<String> + Into<String> + Debug,
 {
     loop {
         let client_request: ClientRequest = read_request(stream)?;
@@ -43,7 +35,7 @@ where
         let op = match client_request {
             ClientRequest::Quit => {
                 log::debug!("Quit command received");
-                break close::<E>(stream);
+                break close(stream);
             }
             ClientRequest::Create(account_id) => Operation::Create(account_id),
             ClientRequest::Deposit(account_id, amount) => Operation::Deposit(account_id, amount),
@@ -61,7 +53,8 @@ where
         let response = bank_deal(&mut *guard, op);
         drop(guard);
 
-        write_response(stream, &response).map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
+        write_response(stream, &response)
+            .map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
     }
 }
 
@@ -101,7 +94,7 @@ where
                         account_id: to.account_id.clone(),
                         balance: to.balance,
                     },
-                    amount: amount,
+                    amount,
                 })
             })
         }
@@ -130,7 +123,7 @@ fn main() -> io::Result<()> {
                 log::debug!("Incoming connection from[{:?}]", peer_addr);
                 let cloned_arc_bank = Arc::clone(&bank);
                 let _ = thread::spawn(move || {
-                    match handle_connection::<InMemoryOpsStorage, InMemoryState, String>(
+                    match handle_connection::<InMemoryOpsStorage, InMemoryState>(
                         &mut stream,
                         cloned_arc_bank,
                     ) {

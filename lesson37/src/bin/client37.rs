@@ -1,7 +1,6 @@
 use common::bank::NonZeroMoney;
 use common::protocol::{self, *};
 use ftail::Ftail;
-use std::fmt::Debug;
 
 use std::{
     io::{self, Write},
@@ -23,10 +22,7 @@ fn read_response(stream: &mut TcpStream) -> io::Result<ServerResponse> {
     protocol::read(stream)
 }
 
-fn handle_connection<E>(stream: &mut TcpStream, requests: &Vec<ClientRequest>) -> io::Result<()>
-where
-    E: From<String> + Into<String> + Debug,
-{
+fn handle_connection(stream: &mut TcpStream, requests: &Vec<ClientRequest>) -> io::Result<()> {
     let client_port = stream.local_addr().unwrap().port();
     log::info!("handling connection from[{}] to the server", client_port);
     for req in requests {
@@ -105,7 +101,7 @@ fn main() -> io::Result<()> {
 
 fn run_client(commands: &Vec<ClientRequest>) -> io::Result<()> {
     if let Ok(mut stream) = TcpStream::connect("127.0.0.1:8080") {
-        handle_connection::<String>(&mut stream, commands)
+        handle_connection(&mut stream, commands)
     } else {
         let msg = "Couldn't connect to server";
         log::error!("{}", msg);

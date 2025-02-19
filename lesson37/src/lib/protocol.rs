@@ -22,16 +22,6 @@ pub enum ClientRequest {
     Quit,                  //завершение сеанса
 }
 
-impl ClientRequest {
-    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(self)
-    }
-
-    pub fn deserialize(encoded: &[u8]) -> Result<ClientRequest, bincode::Error> {
-        bincode::deserialize(&encoded)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountRef {
     pub account_id: String,
@@ -61,16 +51,6 @@ pub enum ServerResponse {
         message: String,
     },
     Bye,
-}
-
-impl ServerResponse {
-    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(self)
-    }
-
-    pub fn deserialize(encoded: &[u8]) -> Result<ServerResponse, bincode::Error> {
-        bincode::deserialize(&encoded)
-    }
 }
 
 pub fn write<T: Serialize>(stream: &mut impl Write, entity: &T) -> io::Result<()> {
