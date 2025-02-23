@@ -12,6 +12,7 @@ members = [
     "lesson37",
     "lesson38",
     "lesson40",
+    "tokio-example-redis"
 ]
 
 resolver = "2"
