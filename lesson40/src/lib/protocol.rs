@@ -31,7 +31,7 @@ impl ClientRequest {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountRef {
-    pub account_id: String,
+    pub account_id: AccountId,
     pub balance: Money,
 }
 
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_client_marshalling() {
-        test_base(ClientRequest::Create("acc1".to_owned()));
+        test_base(ClientRequest::Create(128));
         test_base(ClientRequest::Quit);
     }
 
@@ -98,11 +98,11 @@ mod tests {
     fn test_server_marshalling() {
         test_base(ServerResponse::FundsMovement {
             from: AccountRef {
-                account_id: "acc1".to_owned(),
+                account_id: 128,
                 balance: 120,
             },
             to: AccountRef {
-                account_id: "acc2".to_owned(),
+                account_id: 129,
                 balance: 42,
             },
         });

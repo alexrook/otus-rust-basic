@@ -4,7 +4,7 @@ use std::{
 };
 use thiserror::Error;
 
-pub type AccountId = String;
+pub type AccountId = u128;
 pub type Money = u32;
 pub type NonZeroMoney = NonZeroU32;
 pub type OpId = NonZeroU128;
@@ -146,8 +146,8 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     }
 
     //создание аккаунта
-    pub fn create_account(&mut self, account_id: &AccountId) -> Result<&Account, BankError> {
-        let op = Operation::Create(account_id.clone());
+    pub fn create_account(&mut self, account_id: AccountId) -> Result<&Account, BankError> {
+        let op = Operation::Create(account_id);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
@@ -186,10 +186,10 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     //Клиент может забрать деньги
     pub fn withdraw(
         &mut self,
-        account_id: &AccountId,
+        account_id: AccountId,
         money: NonZeroMoney,
     ) -> Result<&Account, BankError> {
-        let op = Operation::Withdraw(account_id.clone(), money);
+        let op = Operation::Withdraw(account_id, money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
@@ -197,19 +197,19 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     //перемещение денег от счета на счет
     pub fn move_money(
         &mut self,
-        from: &AccountId,
-        to: &AccountId,
+        from: AccountId,
+        to: AccountId,
         money: NonZeroMoney,
     ) -> Result<impl Iterator<Item = &Account>, BankError> {
-        if from.eq(to.as_str()) {
+        if from == to {
             return Err(BankError::Prohibited(format!(
                 "Sending funds to yourself is prohibited"
             )));
         }
 
         let ops = vec![
-            Operation::Withdraw(from.clone(), money),
-            Operation::Deposit(to.clone(), money),
+            Operation::Withdraw(from, money),
+            Operation::Deposit(to, money),
         ]
         .into_iter();
         //first save to storage
@@ -415,10 +415,10 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
 
-        let ret = Bank::create_account(&mut bank, &acc_1);
+        let ret = Bank::create_account(&mut bank, acc_1);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -427,7 +427,7 @@ mod test {
             })
         );
 
-        let ret = Bank::create_account(&mut bank, &acc_2);
+        let ret = Bank::create_account(&mut bank, acc_2);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -443,11 +443,11 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
 
@@ -486,11 +486,11 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
@@ -510,7 +510,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, BankError> = bank.withdraw(&acc_1, NonZeroMoney::MIN);
+        let ret: Result<&Account, BankError> = bank.withdraw(acc_1, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -520,7 +520,7 @@ mod test {
         );
 
         let ret: Result<&Account, BankError> =
-            bank.withdraw(&acc_1, NonZeroMoney::new(41).unwrap());
+            bank.withdraw(acc_1, NonZeroMoney::new(41).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {
@@ -529,7 +529,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, BankError> = bank.withdraw(&acc_2, NonZeroMoney::MIN);
+        let ret: Result<&Account, BankError> = bank.withdraw(acc_2, NonZeroMoney::MIN);
         assert_eq!(
             ret,
             Ok(&Account {
@@ -538,7 +538,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, BankError> = bank.withdraw(&acc_2, NonZeroMoney::MAX);
+        let ret: Result<&Account, BankError> = bank.withdraw(acc_2, NonZeroMoney::MAX);
         assert_eq!(
             ret,
             Err(BankError::BadRequest("Insufficient funds".to_string()))
@@ -550,13 +550,13 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
-        let acc_3 = "Acc_3".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
+        let acc_3 = 130;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
-        let _ = bank.create_account(&acc_3);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
+        let _ = bank.create_account(acc_3);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
@@ -577,7 +577,7 @@ mod test {
         );
 
         let mut iter = bank
-            .move_money(&acc_1, &acc_2, NonZeroMoney::new(42).unwrap())
+            .move_money(acc_1, acc_2, NonZeroMoney::new(42).unwrap())
             .expect("should be Ok(iter)");
 
         let first = iter.next().expect("should be the acc_1 with their Account");
@@ -637,13 +637,13 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
-        let acc_3 = "Acc_3".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
+        let acc_3 = 130;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
-        let _ = bank.create_account(&acc_3);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
+        let _ = bank.create_account(acc_3);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
@@ -694,13 +694,13 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
-        let acc_3 = "Acc_3".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
+        let acc_3 = 130;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
-        let _ = bank.create_account(&acc_3);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
+        let _ = bank.create_account(acc_3);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
@@ -757,11 +757,11 @@ mod test {
         let mut bank: Bank<InMemoryOpsStorage, InMemoryState> =
             Bank::new(InMemoryOpsStorage::default(), InMemoryState::default());
 
-        let acc_1 = "Acc_1".to_string();
-        let acc_2 = "Acc_2".to_string();
+        let acc_1 = 128;
+        let acc_2 = 129;
 
-        let _ = bank.create_account(&acc_1);
-        let _ = bank.create_account(&acc_2);
+        let _ = bank.create_account(acc_1);
+        let _ = bank.create_account(acc_2);
 
         let ret: Result<&Account, BankError> = bank.deposit(&acc_1, NonZeroMoney::new(42).unwrap());
         assert_eq!(
@@ -782,7 +782,7 @@ mod test {
         );
 
         let _ = bank
-            .move_money(&acc_1, &acc_2, NonZeroMoney::new(42).unwrap())
+            .move_money(acc_1, acc_2, NonZeroMoney::new(42).unwrap())
             .expect("move should work");
 
         //let _: Vec<(_, _)> = iter.collect();

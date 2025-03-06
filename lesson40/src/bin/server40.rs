@@ -85,11 +85,11 @@ async fn client_loop<T: OpsStorage, S: State>(
         match client_request {
             ClientRequest::Create(account_id) => {
                 let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.create_account(&account_id);
+                let maybe_ret = guard.create_account(account_id);
 
                 let response: ServerResponse = match maybe_ret {
                     Ok(acc) => ServerResponse::AccountState(AccountRef {
-                        account_id: acc.account_id.clone(),
+                        account_id: acc.account_id,
                         balance: acc.balance,
                     }),
 
@@ -120,7 +120,7 @@ async fn client_loop<T: OpsStorage, S: State>(
 
             ClientRequest::Withdraw(account_id, amount) => {
                 let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.withdraw(&account_id, amount);
+                let maybe_ret = guard.withdraw(account_id, amount);
                 let response: ServerResponse = match maybe_ret {
                     Ok(acc) => ServerResponse::AccountState(AccountRef {
                         account_id,
@@ -152,7 +152,7 @@ async fn client_loop<T: OpsStorage, S: State>(
 
             ClientRequest::Move { from, to, amount } => {
                 let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.move_money(&from, &to, amount).and_then(|mut iter| {
+                let maybe_ret = guard.move_money(from, to, amount).and_then(|mut iter| {
                     let from = iter.next().ok_or(BankError::CoreError(
                         "the operation did not return the required number of elements".to_owned(),
                     ))?;
