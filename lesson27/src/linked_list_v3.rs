@@ -9,17 +9,23 @@ pub enum LinkedList<T> {
     Nil,
 }
 
+impl<T> Default for LinkedList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> LinkedList<T> {
     pub fn new() -> LinkedList<T> {
         LinkedList::Nil
     }
 
     //O(1)
-    pub fn prepend(self: Self, v: T) -> LinkedList<T> {
+    pub fn prepend(self, v: T) -> LinkedList<T> {
         self.prepend_rc(Rc::new(v))
     }
 
-    fn prepend_rc(self: Self, v: Rc<T>) -> LinkedList<T> {
+    fn prepend_rc(self, v: Rc<T>) -> LinkedList<T> {
         LinkedList::Cons {
             head: v,
             tail: Rc::new(self),
@@ -109,8 +115,8 @@ impl<'a, T> Iterator for Iter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.0 {
             LinkedList::Cons { head, tail } => {
-                self.0 = &tail;
-                Some(&head)
+                self.0 = tail;
+                Some(head)
             }
             LinkedList::Nil => None,
         }

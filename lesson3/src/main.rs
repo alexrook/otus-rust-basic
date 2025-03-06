@@ -38,7 +38,6 @@ fn int_plus_float_to_int(a: i32, b: f32) -> i64 {
 ///  функция tuple_sum принимает кортеж из двух целых чисел.
 /// Возвращает целое число, равное сумме чисел во входном кортеже.
 ///
-
 fn tuple_sum_v0(a: (u32, u32)) -> u32 {
     a.0 + a.1
 }
@@ -85,7 +84,7 @@ fn array_sum_v3(a: [u32; 3]) -> u32 {
     sum
 }
 
-///FIXME: please explain how I can run loop1
+//FIXME: please explain how I can run loop1
 // fn array_sum_v4(a: [u32; 3]) -> u32 {
 //     let mut loop1 = |idx:usize, acc:u32| {
 //         if idx < 3 {
@@ -94,10 +93,8 @@ fn array_sum_v3(a: [u32; 3]) -> u32 {
 //             acc
 //         }
 //     };
-
 //     loop1(0, 0)
 // }
-
 fn main() {
     println!("double_int32:{}", double_int32(-12));
     println!("double_int64:{}", double_int64(-22));

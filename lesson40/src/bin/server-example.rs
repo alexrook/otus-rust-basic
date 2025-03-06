@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufStream},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufStream},
     net::{TcpListener, TcpStream},
     sync::{
         mpsc::{self, UnboundedReceiver, UnboundedSender},
