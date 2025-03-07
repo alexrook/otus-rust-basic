@@ -109,6 +109,7 @@ pub trait State {
     fn get_balance(&self, account_id: &AccountId) -> Result<&Account, BankError>;
 }
 
+#[derive(Debug, Default)]
 pub struct Bank<T, S> {
     storage: T,
     state: S,
@@ -124,10 +125,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         S: Default,
         T: Default,
     {
-        let mut bank = Bank {
-            storage: T::default(),
-            state: S::default(),
-        };
+        let mut bank: Bank<T, S> = Bank::default();
 
         for (_, op) in history {
             let (_, op) = bank
