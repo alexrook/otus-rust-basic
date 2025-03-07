@@ -64,11 +64,7 @@ pub trait State {
         ops: impl Iterator<Item = (AccountId, &'b Operation)>,
     ) -> Result<impl Iterator<Item = (AccountId, &'a Account)>, Err>;
 
-    fn update<'a>(
-        &'a mut self,
-        account_id: AccountId,
-        op: &Operation,
-    ) -> Result<&'a Account, Err> {
+    fn update<'a>(&'a mut self, account_id: AccountId, op: &Operation) -> Result<&'a Account, Err> {
         self.transact(std::iter::once((account_id, op)))
             .and_then(|mut iter| {
                 iter.next()
@@ -302,9 +298,7 @@ impl OpsStorage for InMemoryOpsStorage {
         Ok(self
             .by_ops_storage
             .iter()
-            .map(|(op_id, (account_id, operation))| {
-                (*op_id, (account_id.clone(), operation))
-            }))
+            .map(|(op_id, (account_id, operation))| (*op_id, (account_id.clone(), operation))))
     }
 
     fn get_ops(
@@ -333,8 +327,12 @@ impl OpsStorage for InMemoryOpsStorage {
         }
 
         Ok(vec.into_iter().map(|op_id| {
-            let (account_id, op) = self.by_ops_storage.get(&op_id).unwrap_or_else(|| panic!("something wrong with your code, by_ops_storage should contain op_id[{}]",
-                    op_id));
+            let (account_id, op) = self.by_ops_storage.get(&op_id).unwrap_or_else(|| {
+                panic!(
+                    "something wrong with your code, by_ops_storage should contain op_id[{}]",
+                    op_id
+                )
+            });
             (op_id, account_id.clone(), op)
         }))
     }
