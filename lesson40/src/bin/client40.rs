@@ -42,7 +42,7 @@ fn handle_connection(stream: &mut TcpStream, requests: Vec<ClientRequest>) -> an
                 account_id,
                 balance,
             }) => {
-                log::info!("Account[{}] state changed{}", account_id, balance)
+                log::info!("Account[{}] state changed[{}]", account_id, balance)
             }
 
             ServerResponse::FundsMovement { from, to } => {

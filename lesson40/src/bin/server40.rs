@@ -151,9 +151,10 @@ async fn client_loop<T: OpsStorage, S: State>(
             //клиент вышел из чата :-)
             Ok(None) => {
                 log::info!("Client[{client_addr}] disconnection");
+                write_response(client_addr, &mut stream, ServerResponse::Bye).await?;
                 break;
             }
-        }
+        };
     }
 
     Ok(())
