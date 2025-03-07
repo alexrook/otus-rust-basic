@@ -75,11 +75,11 @@ pub trait OpsStorage {
 
     fn persist(&mut self, op: Operation) -> Result<(OpId, &Operation), BankError> {
         self.transact(std::iter::once(op)).and_then(|mut iter| {
-            iter.next()
-                .map(|(opt_id, op)| (opt_id, op))
-                .ok_or(BankError::CoreError(
+            iter.next().ok_or_else(|| {
+                BankError::CoreError(
                     "a transaction should return at least one operation".to_owned(),
-                ))
+                )
+            })
         })
     }
     //should be O(N), where N - account ops
@@ -100,9 +100,9 @@ pub trait State {
 
     fn update<'a, 'b>(&'a mut self, op: &'b Operation) -> Result<&'a Account, BankError> {
         self.transact(std::iter::once(op)).and_then(|mut iter| {
-            iter.next().map(|acc| acc).ok_or(BankError::CoreError(
-                "a transaction should return at least one account".to_owned(),
-            ))
+            iter.next().ok_or_else(|| {
+                BankError::CoreError("a transaction should return at least one account".to_owned())
+            })
         })
     }
     //should be O(N), where N - account ops
@@ -288,10 +288,9 @@ impl<'a> InMemoryState {
 
 impl State for InMemoryState {
     fn get_balance(&self, account_id: &AccountId) -> Result<&Account, BankError> {
-        self.0.get(account_id).ok_or(BankError::BadRequest(format!(
-            "Account[{}] not found in bank",
-            account_id
-        )))
+        self.0.get(account_id).ok_or_else(|| {
+            BankError::BadRequest(format!("Account[{}] not found in bank", account_id))
+        })
     }
 
     fn transact<'a, 'b>(
@@ -379,7 +378,7 @@ impl OpsStorage for InMemoryOpsStorage {
                         .expect(format!("something get wrong with your code, bsc by_ops_storage doesn't contain value for op_id[{}]",op_id).as_str());
                         (op_id.clone(),op)
                     })
-                }).ok_or(BankError::BadRequest(format!("There is no account[{}] in the bank",account_id)))
+                }).ok_or_else(||BankError::BadRequest(format!("There is no account[{}] in the bank",account_id)))
     }
 
     fn transact(
@@ -519,8 +518,7 @@ mod test {
             })
         );
 
-        let ret: Result<&Account, BankError> =
-            bank.withdraw(acc_1, NonZeroMoney::new(41).unwrap());
+        let ret: Result<&Account, BankError> = bank.withdraw(acc_1, NonZeroMoney::new(41).unwrap());
         assert_eq!(
             ret,
             Ok(&Account {

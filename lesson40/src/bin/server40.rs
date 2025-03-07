@@ -153,12 +153,18 @@ async fn client_loop<T: OpsStorage, S: State>(
             ClientRequest::Move { from, to, amount } => {
                 let mut guard = bank_ref.write().await;
                 let maybe_ret = guard.move_money(from, to, amount).and_then(|mut iter| {
-                    let from = iter.next().ok_or(BankError::CoreError(
-                        "the operation did not return the required number of elements".to_owned(),
-                    ))?;
-                    let to = iter.next().ok_or(BankError::CoreError(
-                        "the operation did not return the required number of elements".to_owned(),
-                    ))?;
+                    let from = iter.next().ok_or_else(|| {
+                        BankError::CoreError(
+                            "the operation did not return the required number of elements"
+                                .to_owned(),
+                        )
+                    })?;
+                    let to = iter.next().ok_or_else(|| {
+                        BankError::CoreError(
+                            "the operation did not return the required number of elements"
+                                .to_owned(),
+                        )
+                    })?;
                     Ok((from, to))
                 });
 
