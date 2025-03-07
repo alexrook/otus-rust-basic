@@ -1,7 +1,11 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use common::{
-    bank::{Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
+    bank::{Account, Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
     protocol::{AccountRef, ClientRequest, ServerResponse},
 };
 
@@ -58,6 +62,55 @@ async fn write_response(
     Ok(())
 }
 
+fn process_request<T: OpsStorage, S: State, B>(
+    client_request: ClientRequest,
+    bank_ref: &mut B,
+) -> Result<Option<ServerResponse>, BankError>
+where
+    B: DerefMut<Target = Bank<T, S>>,
+{
+    fn to_account_state(account: &Account) -> Option<ServerResponse> {
+        Some(ServerResponse::AccountState(AccountRef {
+            account_id: account.account_id,
+            balance: account.balance,
+        }))
+    }
+    match client_request {
+        ClientRequest::Create(account_id) => {
+            bank_ref.create_account(account_id).map(to_account_state)
+        }
+
+        ClientRequest::Deposit(account_id, amount) => {
+            bank_ref.deposit(&account_id, amount).map(to_account_state)
+        }
+
+        ClientRequest::Withdraw(account_id, amount) => {
+            bank_ref.withdraw(account_id, amount).map(to_account_state)
+        }
+
+        ClientRequest::GetBalance(account_id) => {
+            bank_ref.get_balance(&account_id).map(to_account_state)
+        }
+
+        ClientRequest::Move { from, to, amount } => {
+            bank_ref.move_money(from, to, amount).map(|(from, to)| {
+                Some(ServerResponse::FundsMovement {
+                    from: AccountRef {
+                        account_id: from.account_id.clone(),
+                        balance: from.balance,
+                    },
+                    to: AccountRef {
+                        account_id: to.account_id.clone(),
+                        balance: to.balance,
+                    },
+                })
+            })
+        }
+
+        ClientRequest::Quit => Ok(None),
+    }
+}
+
 async fn client_loop<T: OpsStorage, S: State>(
     client_addr: SocketAddr,
     stream: TcpStream,
@@ -80,117 +133,28 @@ async fn client_loop<T: OpsStorage, S: State>(
             client_request
         );
 
-        //код во многом дублируется для match веток,
-        //к сожалению, пока, не придумал как отрефакторить
-        match client_request {
-            ClientRequest::Create(account_id) => {
-                let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.create_account(account_id);
+        let mut guard = bank_ref.write().await;
 
-                let response: ServerResponse = match maybe_ret {
-                    Ok(acc) => ServerResponse::AccountState(AccountRef {
-                        account_id: acc.account_id,
-                        balance: acc.balance,
-                    }),
+        let maybe_response = process_request(client_request, &mut guard);
+        drop(guard);
 
-                    Err(bank_err) => ServerResponse::Error {
+        match maybe_response {
+            //успешная операция в банке
+            Ok(Some(response)) => write_response(client_addr, &mut stream, response).await?,
+            //ошибочная операция в банке
+            Err(bank_err) => {
+                write_response(
+                    client_addr,
+                    &mut stream,
+                    ServerResponse::Error {
                         message: bank_err.to_string(),
                     },
-                };
-
-                drop(guard);
-                write_response(client_addr, &mut stream, response).await?;
+                )
+                .await?
             }
-
-            ClientRequest::Deposit(account_id, amount) => {
-                let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.deposit(&account_id, amount);
-                let response: ServerResponse = match maybe_ret {
-                    Ok(acc) => ServerResponse::AccountState(AccountRef {
-                        account_id,
-                        balance: acc.balance,
-                    }),
-                    Err(bank_err) => ServerResponse::Error {
-                        message: bank_err.to_string(),
-                    },
-                };
-                drop(guard);
-                write_response(client_addr, &mut stream, response).await?;
-            }
-
-            ClientRequest::Withdraw(account_id, amount) => {
-                let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.withdraw(account_id, amount);
-                let response: ServerResponse = match maybe_ret {
-                    Ok(acc) => ServerResponse::AccountState(AccountRef {
-                        account_id,
-                        balance: acc.balance,
-                    }),
-                    Err(bank_err) => ServerResponse::Error {
-                        message: bank_err.to_string(),
-                    },
-                };
-                drop(guard);
-                write_response(client_addr, &mut stream, response).await?;
-            }
-
-            ClientRequest::GetBalance(account_id) => {
-                let guard = bank_ref.read().await;
-                let maybe_ret = guard.get_balance(&account_id);
-                let response: ServerResponse = match maybe_ret {
-                    Ok(acc) => ServerResponse::AccountState(AccountRef {
-                        account_id,
-                        balance: acc.balance,
-                    }),
-                    Err(bank_err) => ServerResponse::Error {
-                        message: bank_err.to_string(),
-                    },
-                };
-                drop(guard);
-                write_response(client_addr, &mut stream, response).await?;
-            }
-
-            ClientRequest::Move { from, to, amount } => {
-                let mut guard = bank_ref.write().await;
-                let maybe_ret = guard.move_money(from, to, amount).and_then(|mut iter| {
-                    let from = iter.next().ok_or_else(|| {
-                        BankError::CoreError(
-                            "the operation did not return the required number of elements"
-                                .to_owned(),
-                        )
-                    })?;
-                    let to = iter.next().ok_or_else(|| {
-                        BankError::CoreError(
-                            "the operation did not return the required number of elements"
-                                .to_owned(),
-                        )
-                    })?;
-                    Ok((from, to))
-                });
-
-                let response: ServerResponse = match maybe_ret {
-                    Ok((from, to)) => ServerResponse::FundsMovement {
-                        from: AccountRef {
-                            account_id: from.account_id.clone(),
-                            balance: from.balance,
-                        },
-                        to: AccountRef {
-                            account_id: to.account_id.clone(),
-                            balance: to.balance,
-                        },
-                    },
-                    Err(bank_err) => ServerResponse::Error {
-                        message: bank_err.to_string(),
-                    },
-                };
-
-                drop(guard);
-                write_response(client_addr, &mut stream, response).await?;
-            }
-
-            ClientRequest::Quit => {
+            //клиент вышел из чата :-)
+            Ok(None) => {
                 log::info!("Client[{client_addr}] disconnection");
-                write_response(client_addr, &mut stream, ServerResponse::Bye).await?;
                 break;
             }
         }
