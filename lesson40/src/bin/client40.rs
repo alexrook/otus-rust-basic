@@ -11,8 +11,6 @@ use std::{
     net::TcpStream,
 };
 
-use anyhow;
-
 fn write_request_sync(stream: &mut TcpStream, req: &ClientRequest) -> anyhow::Result<()> {
     let encoded: Vec<u8> = req.serialize()?;
     let len = (encoded.len() as u32).to_be_bytes();

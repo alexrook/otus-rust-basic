@@ -25,7 +25,7 @@ impl ClientRequest {
     }
 
     pub fn deserialize(encoded: &[u8]) -> Result<ClientRequest, bincode::Error> {
-        bincode::deserialize(&encoded)
+        bincode::deserialize(encoded)
     }
 }
 
@@ -65,7 +65,7 @@ impl ServerResponse {
     }
 
     pub fn deserialize(encoded: &[u8]) -> Result<ServerResponse, bincode::Error> {
-        bincode::deserialize(&encoded)
+        bincode::deserialize(encoded)
     }
 }
 

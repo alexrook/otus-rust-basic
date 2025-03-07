@@ -1,8 +1,4 @@
-use std::{
-    net::SocketAddr,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::{net::SocketAddr, ops::DerefMut, sync::Arc};
 
 use common::{
     bank::{Account, Bank, BankError, InMemoryOpsStorage, InMemoryState, OpsStorage, State},
@@ -96,11 +92,11 @@ where
             bank_ref.move_money(from, to, amount).map(|(from, to)| {
                 Some(ServerResponse::FundsMovement {
                     from: AccountRef {
-                        account_id: from.account_id.clone(),
+                        account_id: from.account_id,
                         balance: from.balance,
                     },
                     to: AccountRef {
-                        account_id: to.account_id.clone(),
+                        account_id: to.account_id,
                         balance: to.balance,
                     },
                 })

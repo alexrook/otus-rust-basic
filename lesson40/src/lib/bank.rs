@@ -87,7 +87,7 @@ pub trait State {
         ops: impl Iterator<Item = &'b Operation>,
     ) -> Result<impl Iterator<Item = &'a Account> + 'a, BankError>;
 
-    fn update<'a, 'b>(&'a mut self, op: &'b Operation) -> Result<&'a Account, BankError> {
+    fn update<'a>(&'a mut self, op: &Operation) -> Result<&'a Account, BankError> {
         self.transact(std::iter::once(op)).and_then(|mut iter| {
             iter.next().ok_or_else(|| {
                 BankError::CoreError("a transaction should return at least one account".to_owned())
@@ -120,7 +120,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
             let (_, op) = bank
                 .storage
                 .persist(op.clone())
-                .expect(format!("something wrong with history operation[{:?}]", op).as_str());
+                .unwrap_or_else(|_| panic!("something wrong with history operation[{:?}]", op));
 
             if let Err(err) = bank.state.update(op) {
                 println!("History operation has an error[{:?}]", err)
@@ -163,7 +163,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         account_id: &AccountId,
         money: NonZeroMoney,
     ) -> Result<&Account, BankError> {
-        let op = Operation::Deposit(account_id.clone(), money);
+        let op = Operation::Deposit(*account_id, money);
         let (_, op) = self.storage.persist(op)?;
         self.state.update(op)
     }
@@ -188,7 +188,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
     ) -> Result<(&Account, &Account), BankError> {
         if from == to {
             return Err(BankError::Prohibited(format!(
-                "Sending funds to yourself is prohibited"
+                "Sending funds to yourself[{to}] is prohibited"
             )));
         }
 
@@ -235,10 +235,10 @@ impl<'a> InMemoryState {
 
             Operation::Create(account_id) => {
                 let new_account = Account {
-                    account_id: account_id.clone(),
+                    account_id: *account_id,
                     balance: 0_u32,
                 };
-                self.0.insert(account_id.clone(), new_account);
+                self.0.insert(*account_id, new_account);
                 account_id
             }
 
@@ -291,7 +291,7 @@ impl State for InMemoryState {
         // Фаза 1: модификация данных
         for op in ops {
             match self.push_to_col(op) {
-                Ok((account_id, _)) => successful_accounts_ids.push(account_id.clone()), // Сохраняем ID аккаунтов
+                Ok((account_id, _)) => successful_accounts_ids.push(*account_id), // Сохраняем ID аккаунтов
                 Err(err) => return Err(err),
             }
         }
@@ -329,10 +329,9 @@ impl InMemoryOpsStorage {
 
         self.cur_key = new_key;
 
-        let account_id = op.account_id().clone();
+        let account_id = *op.account_id();
 
-        self.by_ops_storage
-            .insert(new_key, (account_id.clone(), op));
+        self.by_ops_storage.insert(new_key, (account_id, op));
 
         self.by_acc_storage
             .entry(account_id)
@@ -352,7 +351,7 @@ impl OpsStorage for InMemoryOpsStorage {
         Ok(self
             .by_ops_storage
             .iter()
-            .map(|(op_id, (_, operation))| (op_id.clone(), operation)))
+            .map(|(op_id, (_, operation))| (*op_id, operation)))
     }
 
     fn get_ops(
@@ -364,8 +363,8 @@ impl OpsStorage for InMemoryOpsStorage {
                 .map(|list| {
                     list.iter().map(|op_id|{ //O(N)
                         let (_, op)=self.by_ops_storage.get(op_id)//O(lgN)
-                        .expect(format!("something get wrong with your code, bsc by_ops_storage doesn't contain value for op_id[{}]",op_id).as_str());
-                        (op_id.clone(),op)
+                        .unwrap_or_else(||panic!("something get wrong with your code, because by_ops_storage doesn't contain value for op_id[{}]",op_id));
+                        (*op_id,op)
                     })
                 }).ok_or_else(||BankError::BadRequest(format!("There is no account[{}] in the bank",account_id)))
     }
@@ -381,13 +380,12 @@ impl OpsStorage for InMemoryOpsStorage {
         }
 
         Ok(vec.into_iter().map(|op_id| {
-            let (_, op) = self.by_ops_storage.get(&op_id).expect(
-                format!(
+            let (_, op) = self.by_ops_storage.get(&op_id).unwrap_or_else(|| {
+                panic!(
                     "something wrong with your code, by_ops_storage should contain op_id[{}]",
                     op_id
                 )
-                .as_str(),
-            );
+            });
             (op_id, op)
         }))
     }
