@@ -133,9 +133,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
                 .persist(op.clone())
                 .expect(format!("something wrong with history operation[{:?}]", op).as_str());
 
-            let ret = bank.state.update(op);
-
-            if let Some(err) = ret.err() {
+            if let Err(err) = bank.state.update(op) {
                 println!("History operation has an error[{:?}]", err)
             }
         }
