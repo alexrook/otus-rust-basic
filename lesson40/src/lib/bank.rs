@@ -185,7 +185,7 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         from: AccountId,
         to: AccountId,
         money: NonZeroMoney,
-    ) -> Result<impl Iterator<Item = &Account>, BankError> {
+    ) -> Result<(&Account, &Account), BankError> {
         if from == to {
             return Err(BankError::Prohibited(format!(
                 "Sending funds to yourself is prohibited"
@@ -201,7 +201,18 @@ impl<T: OpsStorage, S: State> Bank<T, S> {
         let ops = self.storage.transact(ops)?.map(|(_, op)| op);
 
         //and then update state
-        self.state.transact(ops)
+        let mut accounts = self.state.transact(ops)?;
+        let from = accounts.next().ok_or_else(|| {
+            BankError::CoreError(
+                "the operation did not return the required number of elements".to_owned(),
+            )
+        })?;
+        let to = accounts.next().ok_or_else(|| {
+            BankError::CoreError(
+                "the operation did not return the required number of elements".to_owned(),
+            )
+        })?;
+        Ok((from, to))
     }
 }
 
@@ -538,7 +549,7 @@ mod test {
         assert_eq!(
             ret,
             Ok(&Account {
-                account_id: acc_1.clone(),
+                account_id: acc_1,
                 balance: 42
             })
         );
@@ -547,32 +558,28 @@ mod test {
         assert_eq!(
             ret,
             Ok(&Account {
-                account_id: acc_3.clone(),
+                account_id: acc_3,
                 balance: 21
             })
         );
 
-        let mut iter = bank
+        let (from, to) = bank
             .move_money(acc_1, acc_2, NonZeroMoney::new(42).unwrap())
-            .expect("should be Ok(iter)");
-
-        let first = iter.next().expect("should be the acc_1 with their Account");
-        let second = iter.next().expect("should be the acc_2 with their Account");
+            .expect("should be Ok((from,to))");
         assert_eq!(
-            first,
+            from,
             &Account {
-                account_id: acc_1.clone(),
+                account_id: acc_1,
                 balance: 0
             }
         );
         assert_eq!(
-            second,
+            to,
             &Account {
                 account_id: acc_2.clone(),
                 balance: 42
             }
         );
-        let _: Vec<_> = iter.collect(); //drain iter
 
         let ret: &Account = bank
             .get_balance(&acc_3)
