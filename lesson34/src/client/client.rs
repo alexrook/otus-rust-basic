@@ -6,14 +6,14 @@ use std::{
     net::TcpStream,
 };
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> IOResult<()>
+fn close<E>(stream: &mut TcpStream) -> IOResult<()>
 where
     E: From<String> + Into<String> + Debug,
 {
     IO::write::<E>(stream, &Protocol::Quit)
         .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
-    let _ = stream.flush()?;
-    let _ = stream.shutdown(std::net::Shutdown::Both)?;
+    stream.flush()?;
+    stream.shutdown(std::net::Shutdown::Both)?;
     Ok(())
 }
 

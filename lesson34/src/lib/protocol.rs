@@ -24,14 +24,14 @@ impl IO {
         E: From<String> + Debug,
     {
         let mut magic_data = [0_u8; MAGIC_DATA_SIZE];
-        let _ = reader
+        reader
             .read_exact(&mut magic_data)
             .map_err(|err| E::from(err.to_string()))?;
         let total_size: u8 = MAGIC_DATA_SIZE as u8 + magic_data[1]; //total protocol message size
         let mut buf = vec![0; total_size as usize];
         buf[0] = magic_data[0]; //"восстанавливаем" первые два байта
         buf[1] = magic_data[1];
-        let _ = reader //в остальные байты читаем сообщение
+        reader //в остальные байты читаем сообщение
             .read_exact(&mut buf[MAGIC_DATA_SIZE..])
             .map_err(|err| E::from(err.to_string()))?;
 

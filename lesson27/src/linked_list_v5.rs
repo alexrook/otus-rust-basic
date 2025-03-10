@@ -10,6 +10,12 @@ pub enum LinkedList<T> {
     Cons { head: T, tail: Box<LinkedList<T>> },
 }
 
+impl<T> Default for LinkedList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> LinkedList<T> {
     pub fn new() -> Self {
         Self::Nil
@@ -108,7 +114,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.0.take() {
             Some(LinkedList::Cons { head, tail }) => {
-                self.0 = Some(&tail); //deref ?
+                self.0 = Some(tail); //deref ?
                 Some(head)
             }
             _ => None,
@@ -146,8 +152,8 @@ mod tests {
 
     #[test]
     fn test_creation() {
-        let vec = vec![1, 2, 3];
-        println!("{:?}", vec.iter().next());
+        let vec = [1, 2, 3];
+        println!("{:?}", vec.first());
         vec.iter().for_each(|x| println!("{x}"));
         let list = LinkedList::new();
         let list = list.prepend(1);

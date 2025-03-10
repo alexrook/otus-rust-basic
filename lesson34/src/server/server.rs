@@ -4,20 +4,20 @@ use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result as IOResult, Write};
 use std::net::{TcpListener, TcpStream};
 
-fn close<'a, E>(stream: &'a mut TcpStream) -> IOResult<()>
+fn close<E>(stream: &mut TcpStream) -> IOResult<()>
 where
     E: From<String> + Into<String> + Debug,
 {
     IO::write::<E>(stream, &Protocol::Quit)
         .map_err(|e| Error::new(ErrorKind::BrokenPipe, e.into()))?;
-    let _ = stream.flush()?;
-    let _ = stream.shutdown(std::net::Shutdown::Both)?;
+    stream.flush()?;
+    stream.shutdown(std::net::Shutdown::Both)?;
     Ok(())
 }
 
-fn handle_connection<'a, 'b, T, S, E>(
-    stream: &'b mut TcpStream,
-    bank: &'a mut Bank<T, S>,
+fn handle_connection<T, S, E>(
+    stream: &mut TcpStream,
+    bank: &mut Bank<T, S>,
 ) -> IOResult<()>
 where
     T: OpsStorage,
@@ -29,11 +29,11 @@ where
     match message {
         Protocol::Quit => {
             println!("Quit command received");
-            return close::<E>(stream);
+            close::<E>(stream)
         }
         Protocol::Response(_) => {
             eprintln!("Unexpected client behavior, it should only send Request and Quit protocol commands");
-            return close::<E>(stream);
+            close::<E>(stream)
         }
         Protocol::Request(op) => {
             println!("Operation[{:?}] request received", op);
@@ -41,7 +41,7 @@ where
             let response = match bank_deal(bank, op) {
                 Ok(bank_accs) => {
                     let cloned =
-                        Vec::from_iter(bank_accs.into_iter().map(|account| account.clone()));
+                        Vec::from_iter(bank_accs.into_iter().cloned());
                     Protocol::Response(Ok(cloned))
                 }
                 Err(bank_err) => {
@@ -57,12 +57,12 @@ where
     }
 }
 
-fn bank_deal<'a, T, S>(bank: &'a mut Bank<T, S>, op: Operation) -> Result<Vec<&'a Account>, String>
+fn bank_deal<T, S>(bank: &mut Bank<T, S>, op: Operation) -> Result<Vec<&Account>, String>
 where
     T: OpsStorage,
     S: State,
 {
-    fn map_ret<'a>(ret: Result<&'a Account, String>) -> Result<Vec<&'a Account>, String> {
+    fn map_ret(ret: Result<&Account, String>) -> Result<Vec<&Account>, String> {
         ret.map(|account| vec![account])
     }
 
@@ -73,7 +73,7 @@ where
         Operation::GetBalance(acc) => map_ret(bank.get_balance(&acc)),
         Operation::Move { from, to, amount } => bank
             .move_money(from, to, amount)
-            .map(|iter| Vec::from_iter(iter)),
+            .map(Vec::from_iter),
     }
 }
 

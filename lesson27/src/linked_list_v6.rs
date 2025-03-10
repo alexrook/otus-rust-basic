@@ -10,10 +10,21 @@ pub struct LinkedList<T> {
 
 type Link<T> = Option<Rc<RefCell<Node<T>>>>;
 
+type Splitted<T> = (
+    Box<dyn Iterator<Item = Rc<RefCell<Node<T>>>>>,
+    Box<dyn Iterator<Item = Rc<RefCell<Node<T>>>>>,
+);
+
 #[derive(Debug)]
 pub struct Node<T> {
     pub value: T,
     pub next: Link<T>,
+}
+
+impl<T> Default for LinkedList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> LinkedList<T> {
@@ -40,7 +51,6 @@ impl<T> LinkedList<T> {
     pub fn prepend_a(self, v: T) -> LinkedList<T> {
         match self.head.as_ref() {
             Some(inner) => {
-                Some(Rc::clone(inner));
                 let new_node: Rc<RefCell<Node<T>>> = Self::new_node(v);
                 new_node.borrow_mut().next = Some(Rc::clone(inner));
                 LinkedList {
@@ -110,13 +120,10 @@ impl<T> LinkedList<T> {
         });
     }
 
-    pub fn split(
-        &mut self,
-        i: usize,
-    ) -> (
-        impl Iterator<Item = Rc<RefCell<Node<T>>>>,
-        impl Iterator<Item = Rc<RefCell<Node<T>>>>,
-    ) {
+    pub fn split(&mut self, i: usize) -> Splitted<T>
+    where
+        T: 'static,
+    {
         let left = self
             .iter()
             .enumerate()
@@ -129,7 +136,7 @@ impl<T> LinkedList<T> {
             .skip_while(move |(idx, _)| *idx < i)
             .map(|(_, el)| el);
 
-        (left, right)
+        (Box::new(left), Box::new(right))
     }
 
     //private
@@ -150,9 +157,8 @@ pub struct Iter<T>(Link<T>);
 impl<T> Iterator for Iter<T> {
     type Item = Rc<RefCell<Node<T>>>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.take().map(|inner| {
+        self.0.take().inspect(|inner| {
             self.0 = inner.borrow().next.clone(); //это должно увеличить счетчик Rc без клонирования T
-            inner
         })
     }
 }

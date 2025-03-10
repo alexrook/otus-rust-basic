@@ -211,12 +211,9 @@ pub trait Deserializable<T, E> {
         I: Debug,
         F: FnOnce(&TypeIdMark, &[u8]) -> std::result::Result<T, I>,
     {
-        let type_id: &TypeIdMark = data
-            .get(0)
+        let type_id: &TypeIdMark = data.first()
             .filter(|type_id| is_expected_type_id(type_id))
-            .ok_or(E::from(format!(
-                "The first byte in data isn't specified or isn't equal to the expected type id"
-            )))?;
+            .ok_or(E::from("The first byte in data isn't specified or isn't equal to the expected type id".to_string()))?;
 
         let len: usize = data.get(1).map(|x| *x as usize).ok_or(E::from(
             "The second byte in data should be equal next data length".to_string(),
@@ -300,8 +297,8 @@ where
                 let (account_id, cursor) = AccountId::deserialize(next)?;
                 let next = next
                     .get(cursor.pos..)
-                    .ok_or(format!("unsufficient bytes for money reading"))?;
-                let (balance, _) = Money::deserialize(&next)?;
+                    .ok_or("unsufficient bytes for money reading".to_string())?;
+                let (balance, _) = Money::deserialize(next)?;
                 Ok::<Account, E>(Account {
                     account_id,
                     balance,
@@ -319,7 +316,7 @@ where
 {
     fn deserialize(data: &[u8]) -> DesResult<Result<R1, R2>, E> {
         Self::unmarshall(
-            |type_id| vec![TYPE_ID_RESULT_OK, TYPE_ID_RESULT_ERR].contains(type_id),
+            |type_id| [TYPE_ID_RESULT_OK, TYPE_ID_RESULT_ERR].contains(type_id),
             data,
             |type_id, next: &[u8]| match *type_id {
                 TYPE_ID_RESULT_OK => {
@@ -359,7 +356,7 @@ where
                 while pos < next.len() {
                     next = next
                         .get(pos..)
-                        .ok_or(format!("unsufficient bytes for next elem reading"))?;
+                        .ok_or("unsufficient bytes for next elem reading".to_string())?;
                     let (elem, cursor) = T::deserialize(next)?;
                     ret.push(elem);
                     pos = cursor.pos;
@@ -395,8 +392,8 @@ where
                     let (account_id, cursor) = AccountId::deserialize(next)?;
                     let next = next
                         .get(cursor.pos..)
-                        .ok_or(format!("unsufficient bytes for money reading"))?;
-                    let (non_zero_money, _) = NonZeroMoney::deserialize(&next)?;
+                        .ok_or("unsufficient bytes for money reading".to_string())?;
+                    let (non_zero_money, _) = NonZeroMoney::deserialize(next)?;
                     Ok(Operation::Deposit(account_id, non_zero_money))
                 }
 
@@ -404,8 +401,8 @@ where
                     let (account_id, cursor) = AccountId::deserialize(next)?;
                     let next = next
                         .get(cursor.pos..)
-                        .ok_or(format!("unsufficient bytes for money reading"))?;
-                    let (non_zero_money, _) = NonZeroMoney::deserialize(&next)?;
+                        .ok_or("unsufficient bytes for money reading".to_string())?;
+                    let (non_zero_money, _) = NonZeroMoney::deserialize(next)?;
                     Ok(Operation::Withdraw(account_id, non_zero_money))
                 }
 
@@ -413,13 +410,13 @@ where
                     let (from, cursor) = AccountId::deserialize(next)?;
                     let next = next
                         .get(cursor.pos..)
-                        .ok_or(format!("unsufficient bytes for account id reading"))?;
+                        .ok_or("unsufficient bytes for account id reading".to_string())?;
                     let (to, cursor) = AccountId::deserialize(next)?;
                     let next = next
                         .get(cursor.pos..)
-                        .ok_or(format!("unsufficient bytes for money reading"))?;
+                        .ok_or("unsufficient bytes for money reading".to_string())?;
 
-                    let (amount, _) = NonZeroMoney::deserialize(&next)?;
+                    let (amount, _) = NonZeroMoney::deserialize(next)?;
                     Ok(Operation::Move { from, to, amount })
                 }
 
